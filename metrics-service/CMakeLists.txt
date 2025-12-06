@@ -1,10 +1,17 @@
 cmake_minimum_required(VERSION 3.10)
-project(metrics-service)
+project(metrics_service LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include_directories(include)
+add_executable(metrics_service
+    src/main.cpp
+    src/metrics.cpp
+)
 
-file(GLOB_RECURSE SOURCES "src/*.cpp")
+set_target_properties(metrics_service PROPERTIES OUTPUT_NAME "metrics-service")
 
-add_executable(metrics-service ${SOURCES})
+target_include_directories(metrics_service
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)

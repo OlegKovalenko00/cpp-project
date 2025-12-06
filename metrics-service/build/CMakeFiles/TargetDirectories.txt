@@ -1,0 +1,3 @@
+/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles/metrics_service.dir
+/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles/edit_cache.dir
+/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles/rebuild_cache.dir

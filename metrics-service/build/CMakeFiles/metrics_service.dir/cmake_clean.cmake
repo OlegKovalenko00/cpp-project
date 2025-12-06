@@ -1,4 +1,6 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/metrics_service.dir/src/database.cpp.o"
+  "CMakeFiles/metrics_service.dir/src/database.cpp.o.d"
   "CMakeFiles/metrics_service.dir/src/main.cpp.o"
   "CMakeFiles/metrics_service.dir/src/main.cpp.o.d"
   "CMakeFiles/metrics_service.dir/src/metrics.cpp.o"

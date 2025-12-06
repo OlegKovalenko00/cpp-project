@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/include
+CXX_INCLUDES = -I/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/include -I/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/_deps/libpqxx-build/include -I/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/_deps/libpqxx-src/include
 
 CXX_FLAGS = -std=gnu++23
 

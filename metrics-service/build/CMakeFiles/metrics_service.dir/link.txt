@@ -1,1 +1,1 @@
-/usr/bin/c++ CMakeFiles/metrics_service.dir/src/main.cpp.o CMakeFiles/metrics_service.dir/src/metrics.cpp.o -o metrics-service 
+/usr/bin/c++ CMakeFiles/metrics_service.dir/src/main.cpp.o CMakeFiles/metrics_service.dir/src/metrics.cpp.o CMakeFiles/metrics_service.dir/src/database.cpp.o -o metrics-service  _deps/libpqxx-build/src/libpqxx-7.8.a -lpq /usr/lib/x86_64-linux-gnu/libpq.so 

@@ -64,21 +64,89 @@ CMAKE_BINARY_DIR = /home/olozavr/Documents/projects/c++/cpp-project/metrics-serv
 
 # The main recursive "all" target.
 all: CMakeFiles/metrics_service.dir/all
+all: _deps/libpqxx-build/all
 .PHONY : all
 
 # The main recursive "preinstall" target.
-preinstall:
+preinstall: _deps/libpqxx-build/preinstall
 .PHONY : preinstall
 
 # The main recursive "clean" target.
 clean: CMakeFiles/metrics_service.dir/clean
+clean: _deps/libpqxx-build/clean
 .PHONY : clean
+
+#=============================================================================
+# Directory level rules for directory _deps/libpqxx-build
+
+# Recursive "all" directory target.
+_deps/libpqxx-build/all: _deps/libpqxx-build/src/all
+_deps/libpqxx-build/all: _deps/libpqxx-build/include/all
+_deps/libpqxx-build/all: _deps/libpqxx-build/test/all
+.PHONY : _deps/libpqxx-build/all
+
+# Recursive "preinstall" directory target.
+_deps/libpqxx-build/preinstall: _deps/libpqxx-build/src/preinstall
+_deps/libpqxx-build/preinstall: _deps/libpqxx-build/include/preinstall
+_deps/libpqxx-build/preinstall: _deps/libpqxx-build/test/preinstall
+.PHONY : _deps/libpqxx-build/preinstall
+
+# Recursive "clean" directory target.
+_deps/libpqxx-build/clean: _deps/libpqxx-build/src/clean
+_deps/libpqxx-build/clean: _deps/libpqxx-build/include/clean
+_deps/libpqxx-build/clean: _deps/libpqxx-build/test/clean
+.PHONY : _deps/libpqxx-build/clean
+
+#=============================================================================
+# Directory level rules for directory _deps/libpqxx-build/include
+
+# Recursive "all" directory target.
+_deps/libpqxx-build/include/all:
+.PHONY : _deps/libpqxx-build/include/all
+
+# Recursive "preinstall" directory target.
+_deps/libpqxx-build/include/preinstall:
+.PHONY : _deps/libpqxx-build/include/preinstall
+
+# Recursive "clean" directory target.
+_deps/libpqxx-build/include/clean:
+.PHONY : _deps/libpqxx-build/include/clean
+
+#=============================================================================
+# Directory level rules for directory _deps/libpqxx-build/src
+
+# Recursive "all" directory target.
+_deps/libpqxx-build/src/all: _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/all
+.PHONY : _deps/libpqxx-build/src/all
+
+# Recursive "preinstall" directory target.
+_deps/libpqxx-build/src/preinstall:
+.PHONY : _deps/libpqxx-build/src/preinstall
+
+# Recursive "clean" directory target.
+_deps/libpqxx-build/src/clean: _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/clean
+.PHONY : _deps/libpqxx-build/src/clean
+
+#=============================================================================
+# Directory level rules for directory _deps/libpqxx-build/test
+
+# Recursive "all" directory target.
+_deps/libpqxx-build/test/all: _deps/libpqxx-build/test/CMakeFiles/runner.dir/all
+.PHONY : _deps/libpqxx-build/test/all
+
+# Recursive "preinstall" directory target.
+_deps/libpqxx-build/test/preinstall:
+.PHONY : _deps/libpqxx-build/test/preinstall
+
+# Recursive "clean" directory target.
+_deps/libpqxx-build/test/clean: _deps/libpqxx-build/test/CMakeFiles/runner.dir/clean
+.PHONY : _deps/libpqxx-build/test/clean
 
 #=============================================================================
 # Target rules for target CMakeFiles/metrics_service.dir
 
 # All Build rule for target.
-CMakeFiles/metrics_service.dir/all:
+CMakeFiles/metrics_service.dir/all: _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/metrics_service.dir/build.make CMakeFiles/metrics_service.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/metrics_service.dir/build.make CMakeFiles/metrics_service.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles --progress-num=1,2,3 "Built target metrics_service"
@@ -86,7 +154,7 @@ CMakeFiles/metrics_service.dir/all:
 
 # Build rule for subdir invocation for target.
 CMakeFiles/metrics_service.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles 3
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles 26
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/metrics_service.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles 0
 .PHONY : CMakeFiles/metrics_service.dir/rule
@@ -99,6 +167,58 @@ metrics_service: CMakeFiles/metrics_service.dir/rule
 CMakeFiles/metrics_service.dir/clean:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/metrics_service.dir/build.make CMakeFiles/metrics_service.dir/clean
 .PHONY : CMakeFiles/metrics_service.dir/clean
+
+#=============================================================================
+# Target rules for target _deps/libpqxx-build/src/CMakeFiles/pqxx.dir
+
+# All Build rule for target.
+_deps/libpqxx-build/src/CMakeFiles/pqxx.dir/all:
+	$(MAKE) $(MAKESILENT) -f _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/build.make _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/depend
+	$(MAKE) $(MAKESILENT) -f _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/build.make _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles --progress-num=4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26 "Built target pqxx"
+.PHONY : _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/all
+
+# Build rule for subdir invocation for target.
+_deps/libpqxx-build/src/CMakeFiles/pqxx.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles 23
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles 0
+.PHONY : _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/rule
+
+# Convenience name for target.
+pqxx: _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/rule
+.PHONY : pqxx
+
+# clean rule for target.
+_deps/libpqxx-build/src/CMakeFiles/pqxx.dir/clean:
+	$(MAKE) $(MAKESILENT) -f _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/build.make _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/clean
+.PHONY : _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/clean
+
+#=============================================================================
+# Target rules for target _deps/libpqxx-build/test/CMakeFiles/runner.dir
+
+# All Build rule for target.
+_deps/libpqxx-build/test/CMakeFiles/runner.dir/all: _deps/libpqxx-build/src/CMakeFiles/pqxx.dir/all
+	$(MAKE) $(MAKESILENT) -f _deps/libpqxx-build/test/CMakeFiles/runner.dir/build.make _deps/libpqxx-build/test/CMakeFiles/runner.dir/depend
+	$(MAKE) $(MAKESILENT) -f _deps/libpqxx-build/test/CMakeFiles/runner.dir/build.make _deps/libpqxx-build/test/CMakeFiles/runner.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles --progress-num=27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100 "Built target runner"
+.PHONY : _deps/libpqxx-build/test/CMakeFiles/runner.dir/all
+
+# Build rule for subdir invocation for target.
+_deps/libpqxx-build/test/CMakeFiles/runner.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles 97
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/libpqxx-build/test/CMakeFiles/runner.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/CMakeFiles 0
+.PHONY : _deps/libpqxx-build/test/CMakeFiles/runner.dir/rule
+
+# Convenience name for target.
+runner: _deps/libpqxx-build/test/CMakeFiles/runner.dir/rule
+.PHONY : runner
+
+# clean rule for target.
+_deps/libpqxx-build/test/CMakeFiles/runner.dir/clean:
+	$(MAKE) $(MAKESILENT) -f _deps/libpqxx-build/test/CMakeFiles/runner.dir/build.make _deps/libpqxx-build/test/CMakeFiles/runner.dir/clean
+.PHONY : _deps/libpqxx-build/test/CMakeFiles/runner.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

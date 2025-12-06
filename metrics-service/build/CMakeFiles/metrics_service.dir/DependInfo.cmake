@@ -8,6 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/src/database.cpp" "CMakeFiles/metrics_service.dir/src/database.cpp.o" "gcc" "CMakeFiles/metrics_service.dir/src/database.cpp.o.d"
   "/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/src/main.cpp" "CMakeFiles/metrics_service.dir/src/main.cpp.o" "gcc" "CMakeFiles/metrics_service.dir/src/main.cpp.o.d"
   "/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/src/metrics.cpp" "CMakeFiles/metrics_service.dir/src/metrics.cpp.o" "gcc" "CMakeFiles/metrics_service.dir/src/metrics.cpp.o.d"
   )

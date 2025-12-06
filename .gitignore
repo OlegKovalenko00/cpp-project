@@ -1,0 +1,19 @@
+# Build
+build/
+cmake-build-*/
+*.o
+*.out
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# VSCode
+.vscode/
+
+# IntelliJ IDEA / CLion
+.idea/
+

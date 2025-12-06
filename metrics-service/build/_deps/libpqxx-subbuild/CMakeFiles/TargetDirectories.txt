@@ -1,3 +1,0 @@
-/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/_deps/libpqxx-subbuild/CMakeFiles/libpqxx-populate.dir
-/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/_deps/libpqxx-subbuild/CMakeFiles/edit_cache.dir
-/home/olozavr/Documents/projects/c++/cpp-project/metrics-service/build/_deps/libpqxx-subbuild/CMakeFiles/rebuild_cache.dir

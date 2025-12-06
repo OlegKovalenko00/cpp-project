@@ -1,0 +1,89 @@
+# ============================
+#  GLOBAL BUILD ARTIFACTS
+# ============================
+build/
+cmake-build-*/
+cmake-build-debug/
+cmake-build-release/
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+cmake_install.cmake
+Makefile
+
+# Binary outputs
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+*.out
+*.exe
+
+# ============================
+#  LOGS
+# ============================
+*.log
+*.err
+*.trace
+
+# ============================
+#  OS / GENERAL TEMP FILES
+# ============================
+*.tmp
+*.temp
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+
+# ============================
+#  PYTHON (если есть скрипты)
+# ============================
+__pycache__/
+*.pyc
+*.pyo
+
+# ============================
+#  IDE SETTINGS
+# ============================
+
+# VSCode
+.vscode/
+
+# JetBrains (CLion, IntelliJ)
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# ============================
+#  DOCKER
+# ============================
+*.pid
+docker-volume-data/
+.docker/
+
+# ============================
+#  TESTS
+# ============================
+# googletest build outputs
+test_output/
+coverage/
+*.gcda
+*.gcno
+*.gcov
+
+# ============================
+#  VCPKG (если будешь использовать)
+# ============================
+vcpkg_installed/
+vcpkg_manifests/
+
+# ============================
+#  LOCAL CONFIGS
+# ============================
+.env
+*.local
+*.ini.local

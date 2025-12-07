@@ -1,0 +1,4 @@
+/Users/kira/cpp-project/monitoring-service/build/CMakeFiles/monitoring-service.dir
+/Users/kira/cpp-project/monitoring-service/build/CMakeFiles/run.dir
+/Users/kira/cpp-project/monitoring-service/build/CMakeFiles/edit_cache.dir
+/Users/kira/cpp-project/monitoring-service/build/CMakeFiles/rebuild_cache.dir

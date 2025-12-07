@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libprotobuf-dev \
     protobuf-compiler \
     protobuf-compiler-grpc \
+    libevent-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY proto/metrics.proto /app/proto/
@@ -29,7 +30,7 @@ RUN protoc --proto_path=/app/proto \
 
 RUN mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
 
-FROM debian:bookworm-slim
+FROM debian:bookworm
 
 WORKDIR /app
 
@@ -37,16 +38,26 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     libgrpc++1.51 \
     libprotobuf32 \
+    libevent-2.1-7 \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=builder /usr/local/lib64/libstdc++.so.6* /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /app/build/metrics-service .
 
 ENV GRPC_PORT=50051
+ENV HTTP_PORT=8080
 ENV POSTGRES_HOST=postgres
 ENV POSTGRES_DB=metrics_db
 ENV POSTGRES_USER=metrics_user
 ENV POSTGRES_PASSWORD=metrics_password
+ENV RABBITMQ_HOST=rabbitmq
+ENV RABBITMQ_PORT=5672
+ENV RABBITMQ_USER=guest
+ENV RABBITMQ_PASSWORD=guest
+ENV RABBITMQ_QUEUE=metrics_events
 
 EXPOSE 50051
+EXPOSE 8080
 
 CMD ["./metrics-service"]

@@ -9,7 +9,7 @@
 #include <memory>
 
 #include <grpcpp/grpcpp.h>
-#include "metrics_service.grpc.pb.h"
+#include "metrics.grpc.pb.h"
 
 namespace aggregation {
 
@@ -18,21 +18,54 @@ namespace aggregation {
         MetricsClient(const std::string& host, const std::string& port);
         ~MetricsClient();
 
-        std::vector<RawEvent> fetchRawEvents(
-            const std::chrono::system_clock::time_point& startTime,
-            const std::chrono::system_clock::time_point& endTime
+        // Получить все события всех типов за период
+        std::vector<RawEvent> fetchAllEvents(
+            std::chrono::system_clock::time_point from,
+            std::chrono::system_clock::time_point to
+        );
+
+        // Отдельные методы для каждого типа событий
+        std::vector<RawEvent> fetchPageViews(
+            std::chrono::system_clock::time_point from,
+            std::chrono::system_clock::time_point to
+        );
+
+        std::vector<RawEvent> fetchClicks(
+            std::chrono::system_clock::time_point from,
+            std::chrono::system_clock::time_point to
+        );
+
+        std::vector<RawEvent> fetchPerformance(
+            std::chrono::system_clock::time_point from,
+            std::chrono::system_clock::time_point to
+        );
+
+        std::vector<RawEvent> fetchErrors(
+            std::chrono::system_clock::time_point from,
+            std::chrono::system_clock::time_point to
+        );
+
+        std::vector<RawEvent> fetchCustomEvents(
+            std::chrono::system_clock::time_point from,
+            std::chrono::system_clock::time_point to
         );
 
         bool isConnected() const;
 
     private:
-        std::string formatTimestamp(std::chrono::system_clock::time_point tp) const;
-        std::chrono::system_clock::time_point parseTimestamp(const std::string& timestampStr) const;
+        metricsys::TimeRange makeTimeRange(
+            std::chrono::system_clock::time_point from,
+            std::chrono::system_clock::time_point to
+        ) const;
+
+        std::chrono::system_clock::time_point timestampToTimePoint(int64_t ts) const;
 
         std::shared_ptr<grpc::Channel> channel_;
-        std::unique_ptr<metrics::MetricsService::Stub> stub_;
+        std::unique_ptr<metricsys::MetricsService::Stub> stub_;
+        std::string projectId_;
     };
 
 } // namespace aggregation
 
 #endif // METRICS_CLIENT_H
+

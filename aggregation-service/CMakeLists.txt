@@ -1,32 +1,28 @@
 cmake_minimum_required(VERSION 3.16)
 project(aggregation-service)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Найти зависимости
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBPQ REQUIRED libpq)
 
 find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
 
-# Пути к плагинам protoc
 find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin)
 
-# Директории
-set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
+# Используем общий proto из корня проекта
+set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../proto)
 set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${GENERATED_DIR})
 
-# Proto файл
-set(PROTO_FILE ${PROTO_DIR}/metrics_service.proto)
+set(PROTO_FILE ${PROTO_DIR}/metrics.proto)
 
-# Генерация protobuf и gRPC stubs
-set(PROTO_SRCS ${GENERATED_DIR}/metrics_service.pb.cc)
-set(PROTO_HDRS ${GENERATED_DIR}/metrics_service.pb.h)
-set(GRPC_SRCS ${GENERATED_DIR}/metrics_service.grpc.pb.cc)
-set(GRPC_HDRS ${GENERATED_DIR}/metrics_service.grpc.pb.h)
+set(PROTO_SRCS ${GENERATED_DIR}/metrics.pb.cc)
+set(PROTO_HDRS ${GENERATED_DIR}/metrics.pb.h)
+set(GRPC_SRCS ${GENERATED_DIR}/metrics.grpc.pb.cc)
+set(GRPC_HDRS ${GENERATED_DIR}/metrics.grpc.pb.h)
 
 add_custom_command(
         OUTPUT ${PROTO_SRCS} ${PROTO_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
@@ -37,10 +33,9 @@ add_custom_command(
         --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}
         ${PROTO_FILE}
         DEPENDS ${PROTO_FILE}
-        COMMENT "Generating protobuf and gRPC stubs"
+        COMMENT "Generating protobuf and gRPC stubs from metrics.proto"
 )
 
-# Библиотека с основной логикой
 add_library(aggregation-core
         src/aggregator.cpp
         src/database.cpp
@@ -61,11 +56,9 @@ target_link_libraries(aggregation-core PUBLIC
         gRPC::grpc++
 )
 
-# Исполняемый файл
 add_executable(aggregation-service src/main.cpp)
 target_link_libraries(aggregation-service PRIVATE aggregation-core)
 
-# Тесты
 enable_testing()
 
 add_executable(test_aggregator tests/test_aggregator.cpp)

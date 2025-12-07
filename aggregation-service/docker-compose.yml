@@ -3,9 +3,9 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_DB: metrics_aggregation_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aggregation_db
+      POSTGRES_USER: agguser
+      POSTGRES_PASSWORD: aggpassword
     ports:
       - "5434:5432"
     volumes:

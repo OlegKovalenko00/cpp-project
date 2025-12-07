@@ -1,0 +1,152 @@
+syntax = "proto3";
+
+package metricsys;
+
+service MetricsService {
+    rpc GetPageViews(GetPageViewsRequest) returns (GetPageViewsResponse);
+    
+    rpc GetClicks(GetClicksRequest) returns (GetClicksResponse);
+    
+    rpc GetPerformance(GetPerformanceRequest) returns (GetPerformanceResponse);
+    
+    rpc GetErrors(GetErrorsRequest) returns (GetErrorsResponse);
+    
+    rpc GetCustomEvents(GetCustomEventsRequest) returns (GetCustomEventsResponse);
+}
+
+message TimeRange {
+    int64 start_timestamp = 1;
+    int64 end_timestamp = 2;
+}
+
+message Pagination {
+    int32 limit = 1;
+    int32 offset = 2;
+}
+
+message PageViewEvent {
+    string id = 1;
+    string page = 2;
+    optional string user_id = 3;
+    optional string session_id = 4;
+    optional string referrer = 5;
+    int64 timestamp = 6;
+}
+
+message GetPageViewsRequest {
+    optional TimeRange time_range = 1;
+    optional Pagination pagination = 2;
+    optional string page_filter = 3;
+    optional string user_id_filter = 4;
+}
+
+message GetPageViewsResponse {
+    repeated PageViewEvent events = 1;
+    int32 total_count = 2;
+}
+
+
+message ClickEvent {
+    string id = 1;
+    string page = 2;
+    string element_id = 3;
+    optional string action = 4;
+    optional string user_id = 5;
+    optional string session_id = 6;
+    int64 timestamp = 7;
+}
+
+message GetClicksRequest {
+    optional TimeRange time_range = 1;
+    optional Pagination pagination = 2;
+    optional string page_filter = 3;
+    optional string element_id_filter = 4;
+    optional string user_id_filter = 5;
+}
+
+message GetClicksResponse {
+    repeated ClickEvent events = 1;
+    int32 total_count = 2;
+}
+
+message PerformanceEvent {
+    string id = 1;
+    string page = 2;
+    optional double ttfb_ms = 3;
+    optional double fcp_ms = 4;
+    optional double lcp_ms = 5;
+    optional double total_page_load_ms = 6;
+    optional string user_id = 7;
+    optional string session_id = 8;
+    int64 timestamp = 9;
+}
+
+message GetPerformanceRequest {
+    optional TimeRange time_range = 1;
+    optional Pagination pagination = 2;
+    optional string page_filter = 3;
+    optional string user_id_filter = 4;
+}
+
+message GetPerformanceResponse {
+    repeated PerformanceEvent events = 1;
+    int32 total_count = 2;
+}
+
+
+enum Severity {
+    SEVERITY_UNSPECIFIED = 0;
+    SEVERITY_WARNING = 1;
+    SEVERITY_ERROR = 2;
+    SEVERITY_CRITICAL = 3;
+}
+
+message ErrorEvent {
+    string id = 1;
+    string page = 2;
+    string error_type = 3;
+    string message = 4;
+    optional string stack = 5;
+    Severity severity = 6;
+    optional string user_id = 7;
+    optional string session_id = 8;
+    int64 timestamp = 9;
+}
+
+message GetErrorsRequest {
+    optional TimeRange time_range = 1;
+    optional Pagination pagination = 2;
+    optional string page_filter = 3;
+    optional Severity severity_filter = 4;
+    optional string error_type_filter = 5;
+    optional string user_id_filter = 6;
+}
+
+message GetErrorsResponse {
+    repeated ErrorEvent events = 1;
+    int32 total_count = 2;
+}
+
+
+message CustomEvent {
+    string id = 1;
+    string name = 2;
+    optional string page = 3;
+    optional string user_id = 4;
+    optional string session_id = 5;
+    map<string, string> properties = 6;
+    int64 timestamp = 7;
+}
+
+message GetCustomEventsRequest {
+    optional TimeRange time_range = 1;
+    optional Pagination pagination = 2;
+    optional string name_filter = 3;
+    optional string page_filter = 4;
+    optional string user_id_filter = 5;
+}
+
+message GetCustomEventsResponse {
+    repeated CustomEvent events = 1;
+    int32 total_count = 2;
+}

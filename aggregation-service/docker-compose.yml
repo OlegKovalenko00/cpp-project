@@ -1,0 +1,15 @@
+services:
+  agg-postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: metrics_aggregation_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - agg_pgdata:/var/lib/postgresql/data
+
+volumes:
+  agg_pgdata:

@@ -17,9 +17,9 @@ std::string GetEnvVar(const std::string& varName, const std::string& defaultValu
 std::string BuildPostrgresConnectionString() {
     std::string host = GetEnvVar("AGG_DB_HOST", "localhost");
     std::string port = GetEnvVar("AGG_DB_PORT", "5434");
-    std::string dbname = GetEnvVar("AGG_DB_NAME", "metrics_aggregation_db");
-    std::string user = GetEnvVar("AGG_DB_USER", "postgres");
-    std::string password = GetEnvVar("AGG_DB_PASSWORD", "postgres");
+    std::string dbname = GetEnvVar("AGG_DB_NAME", "aggregation_db");
+    std::string user = GetEnvVar("AGG_DB_USER", "agguser");
+    std::string password = GetEnvVar("AGG_DB_PASSWORD", "aggpassword");
 
     std::string connectionString = "host=" + host +
                                    " port=" + port +

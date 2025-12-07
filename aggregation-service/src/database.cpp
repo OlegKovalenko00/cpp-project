@@ -89,4 +89,28 @@ bool Database::initializeSchema() {
     return true;
 }
 
+bool Database::executeQuery(const std::string& query) {
+    if (!isConnected()) {
+        std::cerr << "Cannot execute query: no active database connection" << std::endl;
+        return false;
+    }
+
+    PGresult* res = PQexec(dbConnection_, query.c_str());
+
+    if (res == nullptr) {
+        std::cerr << "Failed to execute query: null result" << std::endl;
+        return false;
+    }
+
+    ExecStatusType status = PQresultStatus(res);
+    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
+        std::cerr << "Query execution failed: " << PQerrorMessage(dbConnection_) << std::endl;
+        PQclear(res);
+        return false;
+    }
+
+    PQclear(res);
+    return true;
+}
+
 } // namespace aggregation

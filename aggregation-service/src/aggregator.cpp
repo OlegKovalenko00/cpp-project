@@ -1,6 +1,8 @@
 #include "aggregator.h"
 #include "database.h"
 
+#include <iostream>
+
 namespace aggregation {
 
 Aggregator::Aggregator(Database& db) : database_(db) {
@@ -9,7 +11,30 @@ Aggregator::Aggregator(Database& db) : database_(db) {
 Aggregator::~Aggregator() = default;
 
 void Aggregator::run() {
-    // TODO: Основной цикл агрегации
+    std::string sql =
+        "INSERT INTO aggregated_events ("
+        "    time_bucket, project_id, page, event_type,"
+        "    events_count, unique_users, unique_sessions,"
+        "    avg_perf_ms, p95_perf_ms, errors_count"
+        ") VALUES ("
+        "    NOW(),"
+        "    'demo-project',"
+        "    '/test-page',"
+        "    'page_view',"
+        "    100,"
+        "    10,"
+        "    20,"
+        "    123.0,"
+        "    250.0,"
+        "    3"
+        ");";
+
+    bool success = database_.executeQuery(sql);
+    if (success) {
+        std::cout << "Aggregation run completed successfully." << std::endl;
+    } else {
+        std::cerr << "Aggregation run failed." << std::endl;
+    }
 }
 
 double Aggregator::calculateAverage(const std::vector<double>& values) {

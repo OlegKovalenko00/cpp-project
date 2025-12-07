@@ -19,6 +19,8 @@ public:
 
     bool initializeSchema();
 
+    bool executeQuery(const std::string& query);
+
     // TODO: Методы для работы с метриками
     // std::vector<Metric> fetchMetrics();
     // void saveAggregatedMetrics(const AggregatedMetric& metric);

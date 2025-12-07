@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <libpq-fe.h>
 
 namespace aggregation {
 
@@ -14,9 +15,16 @@ public:
     bool connect(const std::string& connectionString);
     void disconnect();
 
+	bool isConnected() const;
+
+    bool initializeSchema();
+
     // TODO: Методы для работы с метриками
     // std::vector<Metric> fetchMetrics();
     // void saveAggregatedMetrics(const AggregatedMetric& metric);
+
+private:
+    PGconn* dbConnection_;
 };
 
 } // namespace aggregation

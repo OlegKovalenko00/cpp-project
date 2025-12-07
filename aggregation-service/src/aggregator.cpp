@@ -1,9 +1,9 @@
 #include "aggregator.h"
+#include "database.h"
 
 namespace aggregation {
 
-Aggregator::Aggregator() {
-    // TODO: Инициализация
+Aggregator::Aggregator(Database& db) : database_(db) {
 }
 
 Aggregator::~Aggregator() = default;

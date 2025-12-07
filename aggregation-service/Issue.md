@@ -1,9 +1,9 @@
-# ✅ **Issue #1 — Создать каркас репозитория и структуру проекта**
+# ✅ **Issue #1 — Создать каркас aggregation-service**
 
 **Labels:** `setup`, `priority: high`
 **Описание:**
 
-* Инициализировать репозиторий `aggregation-service`.
+* Создать сервис `aggregation-service` в монорепо.
 * Создать базовую структуру проекта:
 
 ```
@@ -11,6 +11,7 @@ aggregation-service/
   src/
     main.cpp
     aggregator.cpp
+    database.cpp
   include/
     aggregator.h
     database.h
@@ -19,233 +20,368 @@ aggregation-service/
     test_database.cpp
   CMakeLists.txt
   Dockerfile
+  docker-compose.yml
   README.md
   TODO.md
 ```
 
-* Настроить `CMakeLists.txt` для сборки сервиса.
-* Добавить простой код “Hello, Aggregation Service” в `main.cpp` для проверки сборки.
+* Настроить `CMakeLists.txt` для сборки:
+  * библиотека `aggregation-core` (aggregator + database),
+  * бинарник `aggregation-service`.
+* Добавить простой вывод `Aggregation Service started` в `main.cpp` для проверки сборки.
 
 **Acceptance criteria:**
 
-* Репозиторий собирается локально через CMake.
-* Есть рабочий каркас файлов.
+* Проект собирается локально через CMake (бинарь `aggregation-service` есть).
+* Есть рабочий каркас файлов и запускаемый `main`.
 
 ---
 
-# ✅ **Issue #2 — Настроить подключение к PostgreSQL**
+# ✅ **Issue #2 — Подключение aggregation-service к своей БД PostgreSQL**
 
 **Labels:** `backend`, `database`, `priority: high`
 **Описание:**
 
-* Реализовать подключение к PostgreSQL через библиотеку `libpqxx`.
-* Создать `database.h` + `database.cpp` или реализовать в `aggregator.cpp`.
-* Функции, которые надо реализовать:
-
-  * `fetchMetrics()`
-  * `writeAggregatedResult()`
-* Подключение должно брать параметры через env-переменные (`POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`).
+* Реализовать подключение `aggregation-service` к собственной БД Postgres через библиотеку `libpq` (C-API).
+* Реализовать `Database` в `database.h` + `database.cpp`:
+  * методы:
+    * `bool connect(const std::string& connectionString);`
+    * `void disconnect();`
+    * `bool isConnected() const;`
+    * `bool initSchema();` — создаёт таблицы схемы, если их нет.
+* Параметры подключения брать из env-переменных:
+  * `AGG_DB_HOST`
+  * `AGG_DB_PORT`
+  * `AGG_DB_NAME`
+  * `AGG_DB_USER`
+  * `AGG_DB_PASSWORD`
+* В `main.cpp`:
+  * собрать строку подключения из ENV,
+  * создать `Database`,
+  * вызвать `connect()` и `initSchema()`,
+  * завершать работу при ошибке подключения / инициализации схемы.
 
 **Acceptance criteria:**
 
-* Есть функция, которая делает SELECT к таблице `metrics`.
-* Есть функция, которая делает INSERT в `aggregated_metrics`.
-* Ошибки БД логируются.
+* При запуске `aggregation-service`:
+  * устанавливается соединение с Postgres,
+  * в логах видно успешное/неуспешное подключение.
+* При отсутствии БД с именем `AGG_DB_NAME` сервис падает с читаемой ошибкой.
+* Ошибки БД логируются в `stderr`.
 
 ---
 
-# ✅ **Issue #3 — Реализовать модель данных для метрик**
+# ✅ **Issue #3 — Схема БД для aggregation-service**
+
+**Labels:** `backend`, `database`, `design`, `priority: high`
+**Описание:**
+
+* Внутренняя БД `aggregation-service` должна хранить агрегированные метрики и технический watermark.
+* В `Database::initSchema()` (или через миграции) создать таблицы:
+
+  * Таблица `aggregated_events`:
+
+    ```sql
+    CREATE TABLE IF NOT EXISTS aggregated_events (
+        id              SERIAL PRIMARY KEY,
+        time_bucket     TIMESTAMPTZ NOT NULL,
+        project_id      TEXT NOT NULL,
+        page            TEXT,
+        event_type      TEXT NOT NULL,
+        events_count    BIGINT NOT NULL DEFAULT 0,
+        unique_users    BIGINT,
+        unique_sessions BIGINT,
+        avg_perf_ms     DOUBLE PRECISION,
+        p95_perf_ms     DOUBLE PRECISION,
+        errors_count    BIGINT,
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    ```
+
+  * Таблица `aggregation_watermark`:
+
+    ```sql
+    CREATE TABLE IF NOT EXISTS aggregation_watermark (
+        id                 INTEGER PRIMARY KEY,
+        last_aggregated_at TIMESTAMPTZ NOT NULL
+    );
+
+    INSERT INTO aggregation_watermark (id, last_aggregated_at)
+    VALUES (1, '1970-01-01T00:00:00Z')
+    ON CONFLICT (id) DO NOTHING;
+    ```
+
+**Acceptance criteria:**
+
+* При первом старте сервиса таблицы создаются автоматически, если их нет.
+* Повторный запуск не приводит к ошибкам (`CREATE IF NOT EXISTS` / `ON CONFLICT DO NOTHING`).
+* Структура таблиц соответствует описанной схеме.
+
+---
+
+# ✅ **Issue #4 — Модель данных внутри aggregation-service**
 
 **Labels:** `backend`, `design`
 **Описание:**
 
-* Создать структуру для хранения метрик:
+* Определить структуры данных, с которыми будет работать `Aggregator`.
+* Сырые события (то, что приходит от `metrics-service` по gRPC):
 
-```cpp
-struct Metric {
-    std::string name;
-    double value;
-    std::chrono::system_clock::time_point timestamp;
-};
-```
+  ```cpp
+  struct RawEvent {
+      std::string projectId;
+      std::string page;
+      std::string eventType;
+      double performanceMs;
+      bool isError;
+      std::string userId;
+      std::string sessionId;
+      std::chrono::system_clock::time_point timestamp;
+  };
+  ```
 
-* Создать структуру для агрегированных метрик:
+* Агрегированный результат для одной группы (один `time_bucket + projectId + page + eventType`):
 
-```cpp
-struct AggregatedMetric {
-    std::string name;
-    double avg;
-    double min;
-    double max;
-    std::chrono::system_clock::time_point timestamp;
-};
-```
+  ```cpp
+  struct AggregatedEvent {
+      std::string projectId;
+      std::string page;
+      std::string eventType;
+      std::chrono::system_clock::time_point timeBucket;
+      std::int64_t eventsCount;
+      std::int64_t uniqueUsers;
+      std::int64_t uniqueSessions;
+      double avgPerfMs;
+      double p95PerfMs;
+      std::int64_t errorsCount;
+  };
+  ```
 
-* Привести формат timestamp к ISO или Unix time.
+* Структуры объявить в `aggregator.h` (или отдельном `models.h`).
 
 **Acceptance criteria:**
 
-* Структуры объявлены в `aggregator.h`.
-* Код компилируется.
+* Структуры объявлены и компилируются.
+* `timestamp` хранится in `std::chrono::system_clock::time_point`.
+* Пока можно не реализовывать конвертацию в/из протобафа/SQL — только модель.
 
 ---
 
-# ✅ **Issue #4 — Реализовать выборку метрик из таблицы metrics**
+# ✅ **Issue #5 — gRPC-клиент к metrics-service (fetch сырых событий)**
 
-**Labels:** `backend`, `database`, `priority: high`
+**Labels:** `backend`, `grpc`, `priority: high`
 **Описание:**
 
-* Реализовать функцию `std::vector<Metric> fetchMetrics(Duration window)`.
-* Должна выбирать данные за указанный период (например, за последние N минут/часов).
-* Реализовать SQL:
+* `aggregation-service` должен получать сырые события не напрямую из БД, а от `metrics-service` по gRPC.
+* Добавить proto-файл `metrics_service.proto` (или подключить общий), в котором есть метод:
 
-```sql
-SELECT metric_name, metric_value, timestamp
-FROM metrics
-WHERE timestamp > NOW() - INTERVAL 'N minutes';
-```
+  ```proto
+  service MetricsService {
+    rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+  }
+  ```
+
+* В `aggregation-service`:
+  * настроить генерацию C++ stubs для клиента;
+  * реализовать класс `MetricsClient` (например, `metrics_client.h`/`.cpp`) с методом:
+
+    ```cpp
+    std::vector<RawEvent> fetchEvents(
+        std::chrono::system_clock::time_point from,
+        std::chrono::system_clock::time_point to
+    );
+    ```
+
+* Параметры подключения к `metrics-service` взять из ENV:
+  * `METRICS_GRPC_HOST`
+  * `METRICS_GRPC_PORT`
+
+* Важно: никакого прямого `SELECT` к БД метрик из `aggregation-service` — только gRPC.
 
 **Acceptance criteria:**
 
-* Функция возвращает корректный список метрик.
-* Ошибки SQL обрабатываются.
-* Покрыто хотя бы 1 простым тестом.
+* Есть класс `MetricsClient` с методом `fetchEvents(from, to)`, который делает gRPC-вызов.
+* При недоступности `metrics-service` метод логирует ошибку и возвращает пустой вектор/кидает исключение (стратегию оговорить).
+* В тестах можно использовать заглушку вместо реального gRPC (mock/stub).
 
 ---
 
-# ✅ **Issue #5 — Реализовать саму агрегацию данных**
+# ✅ **Issue #6 — Логика агрегации в Aggregator**
 
 **Labels:** `backend`, `logic`, `priority: high`
 **Описание:**
-Реализовать функции:
 
-* `calculateAverage(vector<Metric>)`
-* `calculateMin(vector<Metric>)`
-* `calculateMax(vector<Metric>)`
-* `aggregate(vector<Metric>) → AggregatedMetric`
+* Реализовать в `Aggregator`:
+  * Базовые функции работы с числовыми значениями:
 
-Агрегированный результат должен включать:
+    ```cpp
+    static double calculateAverage(const std::vector<double>& values);
+    static double calculateMin(const std::vector<double>& values);
+    static double calculateMax(const std::vector<double>& values);
+    ```
 
-* среднее
-* минимум
-* максимум
-* timestamp агрегации
+  * Функцию агрегации сырых событий:
+
+    ```cpp
+    std::vector<AggregatedEvent> aggregateEvents(
+        const std::vector<RawEvent>& events,
+        std::chrono::minutes bucketSize
+    );
+    ```
+
+* Логика `aggregateEvents`:
+  * сгруппировать события по ключу:
+    * `time_bucket` (округление `timestamp` до минут/5 минут),
+    * `projectId`,
+    * `page`,
+    * `eventType`;
+  * посчитать для каждой группы:
+    * `eventsCount`,
+    * `uniqueUsers`,
+    * `uniqueSessions`,
+    * `avgPerfMs`,
+    * `p95PerfMs`,
+    * `errorsCount`.
 
 **Acceptance criteria:**
 
-* Функция `aggregate()` возвращает корректный результат.
-* Покрыто тестами.
+* Есть unit-тесты на `calculateAverage`/`Min`/`Max`.
+* Есть тест на `aggregateEvents` для простого набора `RawEvent`.
+* Логика не трогает БД — только in-memory агрегация.
 
 ---
 
-# ✅ **Issue #6 — Запись агрегированных данных в aggregated_metrics**
+# ✅ **Issue #7 — Запись агрегированных данных и watermark в БД**
 
-**Labels:** `database`, `backend`
+**Labels:** `database`, `backend`, `priority: high`
 **Описание:**
 
-* Реализовать SQL:
+* В `Database` реализовать:
 
-```sql
-INSERT INTO aggregated_metrics (metric_name, average_value, max_value, min_value, timestamp)
-VALUES ($1, $2, $3, $4, $5)
-```
+  ```cpp
+  bool writeAggregatedEvents(const std::vector<AggregatedEvent>& rows);
+  bool updateWatermark(const std::chrono::system_clock::time_point& ts);
+  std::optional<std::chrono::system_clock::time_point> getWatermark();
+  ```
 
-* Связать с результатом `aggregate()`.
+* `writeAggregatedEvents`:
+  * делает `INSERT` в `aggregated_events` для каждой строки (либо батчом).
+* `updateWatermark`:
+  * выполняет `UPDATE aggregation_watermark SET last_aggregated_at = ... WHERE id = 1;`
+* `getWatermark`:
+  * делает `SELECT last_aggregated_at FROM aggregation_watermark WHERE id = 1;`
 
 **Acceptance criteria:**
 
-* Данные появляются в таблице `aggregated_metrics`.
-* Ошибки БД корректно обрабатываются.
+* После вызова `writeAggregatedEvents` строки реально появляются в `aggregated_events`.
+* После `updateWatermark` значение в `aggregation_watermark` меняется.
+* Все SQL-ошибки логируются.
 
 ---
 
-# ✅ **Issue #7 — Реализовать режим запуска по таймеру**
+# ✅ **Issue #8 — Реализовать один шаг агрегации в Aggregator::run()**
+
+**Labels:** `backend`, `logic`, `priority: high`
+**Описание:**
+
+* Реализовать в `Aggregator::run()` один шаг агрегации:
+  * Прочитать текущий watermark из БД (`getWatermark()`).
+  * Определить интервал агрегации:
+    * `from = watermark;`
+    * `to = now() - safetyLag` (например, 30 секунд).
+  * Вызвать `MetricsClient::fetchEvents(from, to)`.
+  * Прогнать список событий через `aggregateEvents(...)`.
+  * Записать результат в `aggregated_events` (`writeAggregatedEvents`).
+  * Обновить watermark на `to` (`updateWatermark(to)`).
+* Пока можно запускать `run()` один раз при старте сервиса (без таймера).
+
+**Acceptance criteria:**
+
+* При наличии тестовых событий в `metrics-service` после вызова `run()` появляются строки в `aggregated_events`.
+* В логах видно:
+  * диапазон агрегации (`from`/`to`),
+  * количество полученных сырых событий,
+  * количество записанных агрегатов.
+
+---
+
+# ✅ **Issue #9 — Режим запуска по таймеру**
 
 **Labels:** `feature`, `cron`, `priority: medium`
 **Описание:**
 
-* В `main.cpp` реализовать цикл: каждые N секунд запускать агрегацию.
+* В `main.cpp` реализовать цикл, который:
+  * раз в N секунд/минут вызывает `aggregator.run()`.
 * Использовать `std::this_thread::sleep_for(...)`.
-* Интервал задаётся через env-переменную: `AGGREGATION_INTERVAL_SEC`.
+* Интервал задаётся через env-переменную:
+  * `AGGREGATION_INTERVAL_SEC` (по умолчанию, например, 60).
 
 **Acceptance criteria:**
 
-* Сервис периодически делает агрегацию.
+* Сервис периодически выполняет шаг агрегации.
 * Интервал легко менять через env.
+* Ошибки внутри одного шага не «убивают» весь сервис (есть обработка исключений/ошибок).
 
 ---
 
-# ✅ **Issue #8 — Добавить логирование**
+# ✅ **Issue #10 — Логирование**
 
 **Labels:** `logging`
 **Описание:**
 
-* Добавить логирование событий:
-
-  * старт агрегации,
-  * количество полученных метрик,
-  * результат агрегации,
-  * ошибки БД.
-* Можно начать с простого логирования в stdout.
+* Добавить логирование ключевых событий в stdout/stderr:
+  * старт сервиса;
+  * успешное/неуспешное подключение к БД;
+  * успешная инициализация схемы;
+  * начало и окончание шага агрегации;
+  * количество полученных сырых событий;
+  * количество записанных агрегатов;
+  * ошибки БД;
+  * ошибки gRPC.
+* Можно начать с простого `std::cout` / `std::cerr`.
 
 **Acceptance criteria:**
 
-* В логах видно работу сервиса.
-* Логи читаемы.
+* В логах видно «жизненный цикл» одного шага агрегации.
+* Ошибки сопровождаются понятными сообщениями.
 
 ---
 
-# ✅ **Issue #9 — Dockerfile + интеграция с docker-compose**
+# ✅ **Issue #11 — Dockerfile + интеграция с docker-compose**
 
 **Labels:** `docker`, `infrastructure`, `priority: medium`
 **Описание:**
 
-* Написать Dockerfile:
-
-  * собирать проект через CMake,
-  * запускать исполняемый файл.
-* Проверить локальный запуск.
-* Добавить сервис в общий `docker-compose.yml`.
-
-**Acceptance criteria:**
-
-* Команда `docker-compose up aggregation-service` запускает сервис.
-* Сервис может подключиться к контейнеру postgres.
-
----
-
-# ✅ **Issue #10 — Написать тесты (unit + integration)**
-
-**Labels:** `tests`, `priority: high`
-**Описание:**
-Добавить тесты:
-
-* unit-тесты для:
-
-  * `aggregate()`
-  * min/avg/max функций
-* интеграционный тест (по возможности) для работы с тестовой БД.
+* Написать `Dockerfile` для `aggregation-service`:
+  * собрать проект через CMake,
+  * внутри контейнера запускать бинарник `aggregation-service`.
+* Подключить сервис к контейнеру `agg-postgres`:
+  * через переменные окружения `AGG_DB_HOST=agg-postgres`, `AGG_DB_PORT=5432` и т.п.
+* Добавить сервис в общий `docker-compose.yml` проекта (или отдельный compose для локального теста).
 
 **Acceptance criteria:**
 
-* Тесты запускаются через `ctest`.
-* Покрытие агрегационной логики ≥ простого уровня.
+* `docker compose up aggregation-service agg-postgres` поднимает оба контейнера.
+* `aggregation-service` в контейнере успешно подключается к `agg-postgres` и инициализирует схему.
+* Логи видны через `docker compose logs`.
 
 ---
 
-# ✅ **Issue #11 — Обновить README.md и TODO.md**
+# ✅ **Issue #12 — Обновить README.md и TODO.md**
 
 **Labels:** `documentation`, `priority: low`
 **Описание:**
 
-* Обновить README сервиса:
+* Обновить `README.md` сервиса:
+  * назначение сервиса;
+  * схема взаимодействия (`metrics-service → aggregation-service → monitoring-service`);
+  * сборка (локально и в Docker);
+  * запуск;
+  * переменные окружения (`AGG_DB_*`, `METRICS_GRPC_*`, `AGGREGATION_INTERVAL_SEC`).
+* Обновить `TODO.md`:
+  * перечислить оставшиеся улучшения/оптимизации.
 
-  * назначение,
-  * сборка,
-  * запуск,
-  * переменные окружения.
-* Обновить TODO.md.
+**Acceptance criteria:**
 
----
-
-Если хочешь — могу сделать такую же сетку **для всех сервисов** или сгенерировать **GitHub Project Kanban**, куда это всё сразу раскладывается.
+* `README` даёт понятное представление о сервисе и позволяет новому человеку его собрать и запустить.
+* `TODO` содержит актуальные задачи по развитию `aggregation-service`.

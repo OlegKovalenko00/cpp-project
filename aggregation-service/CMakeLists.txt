@@ -1,23 +1,31 @@
-cmake_minimum_required(VERSION 3.10)
-project(aggregation-service)
+cmake_minimum_required(VERSION 3.16)
+project(aggregation-service LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(PostgreSQL REQUIRED)
+
 include_directories(include)
 
-# Основной исполняемый файл
-file(GLOB SOURCES "src/*.cpp")
-add_executable(aggregation-service ${SOURCES})
+file(GLOB CORE_SOURCES "src/aggregator.cpp" "src/database.cpp")
+add_library(aggregation-core ${CORE_SOURCES})
+target_include_directories(aggregation-core PUBLIC include)
 
-# Тесты
+target_link_libraries(aggregation-core
+        PUBLIC
+        PostgreSQL::PostgreSQL
+)
+
+add_executable(aggregation-service src/main.cpp)
+target_link_libraries(aggregation-service PRIVATE aggregation-core)
+
 enable_testing()
 
-add_executable(test_aggregator tests/test_aggregator.cpp src/aggregator.cpp)
+add_executable(test_aggregator tests/test_aggregator.cpp)
+target_link_libraries(test_aggregator PRIVATE aggregation-core)
 target_include_directories(test_aggregator PRIVATE include)
-add_test(NAME test_aggregator COMMAND test_aggregator)
 
 add_executable(test_database tests/test_database.cpp)
+target_link_libraries(test_database PRIVATE aggregation-core)
 target_include_directories(test_database PRIVATE include)
-add_test(NAME test_database COMMAND test_database)
-

@@ -6,9 +6,11 @@
 
 namespace aggregation {
 
+class Database;
+
 class Aggregator {
 public:
-    Aggregator();
+    explicit Aggregator(Database& db);
     ~Aggregator();
 
     void run();
@@ -16,6 +18,8 @@ public:
     static double calculateAverage(const std::vector<double>& values);
     static double calculateMin(const std::vector<double>& values);
     static double calculateMax(const std::vector<double>& values);
+private:
+    Database& database_;
 };
 
 } // namespace aggregation

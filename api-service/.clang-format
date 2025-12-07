@@ -1,0 +1,42 @@
+BasedOnStyle: LLVM
+Language: Cpp
+
+# Отступы: 4 пробела, табы запрещены
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# Максимальная длина строки — 100 символов
+ColumnLimit: 100
+
+# Фигурные скобки на той же строке, что и if/while/for/функции
+BreakBeforeBraces: Attach
+
+# Короткие конструкции не в одну строку
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: Empty  # пустые блоки в виде {}
+
+# Пробелы
+SpacesInParentheses: false            # f(1, (2 + 3))
+SpacesInAngles: false                 # vector<int>, а не vector <int>
+SpaceBeforeAssignmentOperators: true  # a = b + c
+SpaceBeforeRangeBasedForLoopColon: true   # for (auto x : xs)
+SpaceAfterRangeBasedForLoopColon: true
+SpaceBeforeCpp11BracedList: false
+SpaceInEmptyBlock: false
+SpaceAfterCStyleCast: false
+
+# Выравнивание звёздочек/амперсандов
+PointerAlignment: Left                # int* ptr;
+
+DerivePointerAlignment: false
+
+# Инклуды и using по алфавиту
+SortIncludes: true
+IncludeBlocks: Regroup
+SortUsingDeclarations: true
+
+# Отступ для комментариев (будет 1–2 пробела перед //)
+SpacesBeforeTrailingComments: 2

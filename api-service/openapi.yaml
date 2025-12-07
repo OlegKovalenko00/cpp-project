@@ -1,0 +1,396 @@
+openapi: 3.0.3
+info:
+  title: MetricSys API
+  version: 1.0.0
+  description: API for receiving frontend analytics events.
+
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /health/ping:
+    get:
+      summary: Health check endpoint
+      description: Returns service health status
+      operationId: healthPing
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "ok"
+        '500':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INTERNAL_ERROR"
+                message: "Service unavailable"
+
+
+  /page-views:
+    post:
+      summary: Send page view event
+      operationId: createPageView
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageViewEvent'
+            example:
+              page: "/home"
+              user_id: "user_123"
+              session_id: "sess_456"
+              referrer: "https://google.com/search?q=metrics"
+              timestamp: 1733505600
+      responses:
+        '202':
+          description: Page view accepted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INVALID_PAGE_VIEW"
+                message: "Field 'page' must not be empty"
+                details:
+                  field: "page"
+                  reason: "required"
+
+  /clicks:
+    post:
+      summary: Send click/UI event
+      operationId: createClick
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClickEvent'
+            example:
+              page: "/pricing"
+              element_id: "cta-subscribe-button"
+              action: "click"
+              user_id: "user_123"
+              session_id: "sess_456"
+              timestamp: 1733505605
+      responses:
+        '202':
+          description: Click event accepted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INVALID_CLICK_EVENT"
+                message: "Field 'element_id' must not be empty"
+                details:
+                  field: "element_id"
+                  reason: "required"
+
+  /performance:
+    post:
+      summary: Send frontend performance metrics
+      operationId: createPerformance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerformanceEvent'
+            example:
+              page: "/dashboard"
+              ttfb_ms: 120
+              fcp_ms: 450
+              lcp_ms: 820
+              total_page_load_ms: 1150
+              user_id: "user_123"
+              session_id: "sess_456"
+              timestamp: 1733505610
+      responses:
+        '202':
+          description: Performance metrics accepted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INVALID_PERFORMANCE_EVENT"
+                message: "Timing fields must be non-negative"
+                details:
+                  field: "ttfb_ms"
+                  reason: "must_be_positive"
+
+  /errors:
+    post:
+      summary: Send frontend error event
+      operationId: createErrorEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorEvent'
+            example:
+              page: "/dashboard"
+              error_type: "js_exception"
+              message: "Cannot read properties of undefined (reading 'id')"
+              stack: "TypeError: Cannot read properties of undefined...\n    at Dashboard.tsx:42:15"
+              severity: "error"
+              user_id: "user_123"
+              session_id: "sess_456"
+              timestamp: 1733505615
+      responses:
+        '202':
+          description: Error event accepted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INVALID_ERROR_EVENT"
+                message: "Severity must be one of: warning, error, critical"
+                details:
+                  field: "severity"
+                  reason: "invalid_enum_value"
+
+  /custom-events:
+    post:
+      summary: Send custom application event
+      operationId: createCustomEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomEvent'
+            example:
+              name: "signup_completed"
+              page: "/signup/success"
+              user_id: "user_123"
+              session_id: "sess_456"
+              properties:
+                plan: "pro"
+                source: "landing_a"
+                ab_test_group: "B"
+              timestamp: 1733505620
+      responses:
+        '202':
+          description: Custom event accepted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INVALID_CUSTOM_EVENT"
+                message: "Field 'name' must not be empty"
+                details:
+                  field: "name"
+                  reason: "required"
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: Health status
+          example: "ok"
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          enum:
+            - INVALID_PAGE_VIEW
+            - INVALID_CLICK_EVENT
+            - INVALID_PERFORMANCE_EVENT
+            - INVALID_ERROR_EVENT
+            - INVALID_CUSTOM_EVENT
+            - INVALID_BATCH
+            - VALIDATION_ERROR
+            - INTERNAL_ERROR
+          example: "VALIDATION_ERROR"
+
+        message:
+          type: string
+          description: Human-readable error description
+          example: "Field 'page' must not be empty"
+
+        details:
+          type: object
+          nullable: true
+          description: Optional structured details about the error
+          additionalProperties: true
+          example:
+            field: "page"
+            reason: "required"
+            
+    PageViewEvent:
+      type: object
+      required: [page, timestamp]
+      properties:
+        page:
+          type: string
+          example: "/home"
+        user_id:
+          type: string
+          nullable: true
+          example: "user_123"
+        session_id:
+          type: string
+          nullable: true
+          example: "sess_456"
+        referrer:
+          type: string
+          nullable: true
+          example: "https://google.com/search?q=metrics"
+        timestamp:
+          type: integer
+          format: int64
+          example: 1733505600
+
+    ClickEvent:
+      type: object
+      required: [page, element_id, timestamp]
+      properties:
+        page:
+          type: string
+          example: "/pricing"
+        element_id:
+          type: string
+          example: "cta-subscribe-button"
+        action:
+          type: string
+          example: "click"
+        user_id:
+          type: string
+          nullable: true
+          example: "user_123"
+        session_id:
+          type: string
+          nullable: true
+          example: "sess_456"
+        timestamp:
+          type: integer
+          format: int64
+          example: 1733505605
+
+    PerformanceEvent:
+      type: object
+      required: [page, timestamp]
+      properties:
+        page:
+          type: string
+          example: "/dashboard"
+        ttfb_ms:
+          type: number
+          example: 120
+        fcp_ms:
+          type: number
+          example: 450
+        lcp_ms:
+          type: number
+          example: 800
+        total_page_load_ms:
+          type: number
+          example: 1100
+        user_id:
+          type: string
+          nullable: true
+          example: "user_123"
+        session_id:
+          type: string
+          nullable: true
+          example: "sess_456"
+        timestamp:
+          type: integer
+          format: int64
+          example: 1733505610
+
+    ErrorEvent:
+      type: object
+      required: [page, error_type, message, timestamp]
+      properties:
+        page:
+          type: string
+          example: "/dashboard"
+        error_type:
+          type: string
+          example: "js_exception"
+        message:
+          type: string
+          example: "Cannot read properties of undefined (reading 'id')"
+        stack:
+          type: string
+          nullable: true
+          example: "TypeError: Cannot read properties of undefined...\n    at Dashboard.tsx:42:15"
+        severity:
+          type: string
+          enum: ["warning", "error", "critical"]
+          default: "error"
+          example: "error"
+        user_id:
+          type: string
+          nullable: true
+          example: "user_123"
+        session_id:
+          type: string
+          nullable: true
+          example: "sess_456"
+        timestamp:
+          type: integer
+          format: int64
+          example: 1733505615
+
+    CustomEvent:
+      type: object
+      required: [name, timestamp]
+      properties:
+        name:
+          type: string
+          example: "signup_completed"
+        page:
+          type: string
+          nullable: true
+          example: "/signup/success"
+        user_id:
+          type: string
+          nullable: true
+          example: "user_123"
+        session_id:
+          type: string
+          nullable: true
+          example: "sess_456"
+        properties:
+          type: object
+          additionalProperties: true
+          example:
+            plan: "pro"
+            source: "landing_a"
+            ab_test_group: "B"
+        timestamp:
+          type: integer
+          format: int64
+          example: 1733505620

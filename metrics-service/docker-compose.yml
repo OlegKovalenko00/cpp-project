@@ -1,0 +1,48 @@
+services:
+  metrics-service:
+    build:
+      context: ..
+      dockerfile: metrics-service/Dockerfile
+    container_name: metrics-service
+    ports:
+      - "50051:50051"
+    environment:
+      - GRPC_PORT=50051
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=metrics_db
+      - POSTGRES_USER=metrics_user
+      - POSTGRES_PASSWORD=metrics_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - metrics-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: metrics-postgres
+    environment:
+      - POSTGRES_DB=metrics_db
+      - POSTGRES_USER=metrics_user
+      - POSTGRES_PASSWORD=metrics_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - metrics-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metrics_user -d metrics_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  metrics-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

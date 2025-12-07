@@ -1,0 +1,85 @@
+# -----------------------------
+# CMake / build artifacts
+# -----------------------------
+build/
+**/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+Testing/
+
+# Ninja
+.ninja_deps
+.ninja_log
+build.ninja
+rules.ninja
+
+# Compiled objects / libs / bins
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+
+# Coverage / sanitizers
+*.gcno
+*.gcda
+*.gcov
+*.profraw
+*.profdata
+
+# -----------------------------
+# IDE / Editor configs
+# -----------------------------
+# CLion / IntelliJ
+.idea/
+cmake-build-*/
+
+# VSCode
+.vscode/
+.vscode-test/
+
+# Other editors
+*.swp
+*.swo
+*~
+
+# -----------------------------
+# OS junk
+# -----------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+
+# -----------------------------
+# Logs / temp / cache
+# -----------------------------
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# -----------------------------
+# Env / secrets (если вдруг появятся)
+# -----------------------------
+.env
+.env.*
+*.secret
+*.key
+
+# -----------------------------
+# Docker / контейнеры (если будешь что-то генерить)
+# -----------------------------
+docker-data/

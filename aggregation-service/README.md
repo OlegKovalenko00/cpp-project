@@ -176,7 +176,3 @@ cd build
 make test_aggregator test_database
 ctest --output-on-failure
 ```
-
-## Статус реализации
-
-См. [TODO.md](./TODO.md) для текущего статуса задач.

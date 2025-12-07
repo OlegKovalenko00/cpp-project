@@ -34,12 +34,12 @@ grpc::Status MetricsServiceImpl::GetPageViews(
                   << request->time_range().end_timestamp() << ")";
         }
 
-        if (!request->page_filter().empty()) {
+        if (request->has_page_filter() && !request->page_filter().empty()) {
             query << " AND page LIKE " << tx.quote("%" + request->page_filter() + "%");
         }
 
-        if (!request->user_id().empty()) {
-            query << " AND user_id = " << tx.quote(request->user_id());
+        if (request->has_user_id_filter() && !request->user_id_filter().empty()) {
+            query << " AND user_id = " << tx.quote(request->user_id_filter());
         }
 
         if (request->has_pagination()) {
@@ -81,8 +81,7 @@ grpc::Status MetricsServiceImpl::GetClicks(
         pqxx::work tx(conn);
 
         std::stringstream query;
-        query << "SELECT id, page, element_id, element_class, element_text, "
-              << "x_position, y_position, user_id, session_id, "
+        query << "SELECT id, page, element_id, action, user_id, session_id, "
               << "EXTRACT(EPOCH FROM timestamp)::bigint as ts "
               << "FROM click_events WHERE 1=1";
 
@@ -93,13 +92,16 @@ grpc::Status MetricsServiceImpl::GetClicks(
                   << request->time_range().end_timestamp() << ")";
         }
 
-        if (!request->page_filter().empty()) {
+        if (request->has_page_filter() && !request->page_filter().empty()) {
             query << " AND page LIKE " << tx.quote("%" + request->page_filter() + "%");
         }
 
-        if (!request->element_filter().empty()) {
-            query << " AND (element_id LIKE " << tx.quote("%" + request->element_filter() + "%")
-                  << " OR element_class LIKE " << tx.quote("%" + request->element_filter() + "%") << ")";
+        if (request->has_element_id_filter() && !request->element_id_filter().empty()) {
+            query << " AND element_id LIKE " << tx.quote("%" + request->element_id_filter() + "%");
+        }
+
+        if (request->has_user_id_filter() && !request->user_id_filter().empty()) {
+            query << " AND user_id = " << tx.quote(request->user_id_filter());
         }
 
         if (request->has_pagination()) {
@@ -117,10 +119,7 @@ grpc::Status MetricsServiceImpl::GetClicks(
             event->set_id(row["id"].as<std::string>());
             event->set_page(row["page"].as<std::string>());
             event->set_element_id(row["element_id"].as<std::string>(""));
-            event->set_element_class(row["element_class"].as<std::string>(""));
-            event->set_element_text(row["element_text"].as<std::string>(""));
-            event->set_x_position(row["x_position"].as<int32_t>(0));
-            event->set_y_position(row["y_position"].as<int32_t>(0));
+            event->set_action(row["action"].as<std::string>(""));
             event->set_user_id(row["user_id"].as<std::string>(""));
             event->set_session_id(row["session_id"].as<std::string>(""));
             event->set_timestamp(row["ts"].as<int64_t>(0));
@@ -157,8 +156,12 @@ grpc::Status MetricsServiceImpl::GetPerformance(
                   << request->time_range().end_timestamp() << ")";
         }
 
-        if (!request->page_filter().empty()) {
+        if (request->has_page_filter() && !request->page_filter().empty()) {
             query << " AND page LIKE " << tx.quote("%" + request->page_filter() + "%");
+        }
+
+        if (request->has_user_id_filter() && !request->user_id_filter().empty()) {
+            query << " AND user_id = " << tx.quote(request->user_id_filter());
         }
 
         if (request->has_pagination()) {
@@ -175,10 +178,10 @@ grpc::Status MetricsServiceImpl::GetPerformance(
             auto* event = response->add_events();
             event->set_id(row["id"].as<std::string>());
             event->set_page(row["page"].as<std::string>());
-            event->set_ttfb_ms(row["ttfb_ms"].as<int32_t>(0));
-            event->set_fcp_ms(row["fcp_ms"].as<int32_t>(0));
-            event->set_lcp_ms(row["lcp_ms"].as<int32_t>(0));
-            event->set_total_page_load_ms(row["total_page_load_ms"].as<int32_t>(0));
+            event->set_ttfb_ms(row["ttfb_ms"].as<double>(0));
+            event->set_fcp_ms(row["fcp_ms"].as<double>(0));
+            event->set_lcp_ms(row["lcp_ms"].as<double>(0));
+            event->set_total_page_load_ms(row["total_page_load_ms"].as<double>(0));
             event->set_user_id(row["user_id"].as<std::string>(""));
             event->set_session_id(row["session_id"].as<std::string>(""));
             event->set_timestamp(row["ts"].as<int64_t>(0));
@@ -215,16 +218,20 @@ grpc::Status MetricsServiceImpl::GetErrors(
                   << request->time_range().end_timestamp() << ")";
         }
 
-        if (!request->page_filter().empty()) {
+        if (request->has_page_filter() && !request->page_filter().empty()) {
             query << " AND page LIKE " << tx.quote("%" + request->page_filter() + "%");
         }
 
-        if (!request->error_type_filter().empty()) {
+        if (request->has_error_type_filter() && !request->error_type_filter().empty()) {
             query << " AND error_type = " << tx.quote(request->error_type_filter());
         }
 
-        if (request->min_severity() != metricsys::SEVERITY_UNSPECIFIED) {
-            query << " AND severity >= " << request->min_severity();
+        if (request->has_severity_filter() && request->severity_filter() != metricsys::SEVERITY_UNSPECIFIED) {
+            query << " AND severity >= " << request->severity_filter();
+        }
+
+        if (request->has_user_id_filter() && !request->user_id_filter().empty()) {
+            query << " AND user_id = " << tx.quote(request->user_id_filter());
         }
 
         if (request->has_pagination()) {
@@ -269,7 +276,7 @@ grpc::Status MetricsServiceImpl::GetCustomEvents(
         pqxx::work tx(conn);
 
         std::stringstream query;
-        query << "SELECT id, event_name, page, properties, user_id, session_id, "
+        query << "SELECT id, name, page, user_id, session_id, "
               << "EXTRACT(EPOCH FROM timestamp)::bigint as ts "
               << "FROM custom_events WHERE 1=1";
 
@@ -280,12 +287,16 @@ grpc::Status MetricsServiceImpl::GetCustomEvents(
                   << request->time_range().end_timestamp() << ")";
         }
 
-        if (!request->event_name_filter().empty()) {
-            query << " AND event_name = " << tx.quote(request->event_name_filter());
+        if (request->has_name_filter() && !request->name_filter().empty()) {
+            query << " AND name = " << tx.quote(request->name_filter());
         }
 
-        if (!request->page_filter().empty()) {
+        if (request->has_page_filter() && !request->page_filter().empty()) {
             query << " AND page LIKE " << tx.quote("%" + request->page_filter() + "%");
+        }
+
+        if (request->has_user_id_filter() && !request->user_id_filter().empty()) {
+            query << " AND user_id = " << tx.quote(request->user_id_filter());
         }
 
         if (request->has_pagination()) {
@@ -301,7 +312,7 @@ grpc::Status MetricsServiceImpl::GetCustomEvents(
         for (const auto& row : result) {
             auto* event = response->add_events();
             event->set_id(row["id"].as<std::string>());
-            event->set_event_name(row["event_name"].as<std::string>());
+            event->set_name(row["name"].as<std::string>());
             event->set_page(row["page"].as<std::string>(""));
             event->set_user_id(row["user_id"].as<std::string>(""));
             event->set_session_id(row["session_id"].as<std::string>(""));

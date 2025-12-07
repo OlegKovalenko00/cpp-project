@@ -2,7 +2,6 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# gRPC/protobuf системные + минимум для сборки libpqxx через FetchContent
 RUN apt-get update && apt-get install -y \
     cmake \
     g++ \
@@ -18,21 +17,18 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Копируем proto файл
 COPY proto/metrics.proto /app/proto/
 
-# Копируем исходники metrics-service
 COPY metrics-service/ /app/
 
-# Генерируем C++ код из proto с правильной версией protobuf
 RUN protoc --proto_path=/app/proto \
+           --experimental_allow_proto3_optional \
            --cpp_out=/app/include \
            --grpc_out=/app/include \
            --plugin=protoc-gen-grpc=$(which grpc_cpp_plugin) \
            /app/proto/metrics.proto && \
     mv /app/include/*.cc /app/src/
 
-# Сборка (FetchContent скачает только libpqxx)
 RUN rm -rf build && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j$(nproc)
 

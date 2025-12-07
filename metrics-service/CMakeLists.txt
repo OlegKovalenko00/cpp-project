@@ -6,13 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
-# ===================== gRPC и Protobuf - системные =====================
 find_package(Threads REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GRPC REQUIRED grpc++ grpc)
 
-# ===================== libpqxx через FetchContent =====================
 set(FETCHCONTENT_QUIET OFF)
 FetchContent_Declare(
     libpqxx
@@ -24,7 +22,6 @@ set(PQXX_BUILD_TEST OFF CACHE BOOL "" FORCE)
 set(PQXX_BUILD_DOC OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(libpqxx)
 
-# Исходные файлы
 set(SOURCES
     src/main.cpp
     src/metrics.cpp

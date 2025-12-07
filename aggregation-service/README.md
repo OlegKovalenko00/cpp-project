@@ -76,7 +76,7 @@
 ### Зависимости
 
 - CMake >= 3.16
-- C++17 compiler (GCC/Clang)
+- C++23 compiler (GCC/Clang)
 - PostgreSQL client library (libpq)
 - gRPC и Protobuf
 - Docker (для PostgreSQL)

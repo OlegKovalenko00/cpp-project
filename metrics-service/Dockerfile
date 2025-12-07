@@ -1,10 +1,9 @@
-FROM ubuntu:22.04
+FROM gcc:13 AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     cmake \
-    g++ \
     git \
     pkg-config \
     libssl-dev \
@@ -15,11 +14,10 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler-grpc \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
 COPY proto/metrics.proto /app/proto/
-
-COPY metrics-service/ /app/
+COPY metrics-service/CMakeLists.txt .
+COPY metrics-service/include/ include/
+COPY metrics-service/src/ src/
 
 RUN protoc --proto_path=/app/proto \
            --experimental_allow_proto3_optional \
@@ -29,8 +27,19 @@ RUN protoc --proto_path=/app/proto \
            /app/proto/metrics.proto && \
     mv /app/include/*.cc /app/src/
 
-RUN rm -rf build && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build -j$(nproc)
+RUN mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
+
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    libgrpc++1.51 \
+    libprotobuf32 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/build/metrics-service .
 
 ENV GRPC_PORT=50051
 ENV POSTGRES_HOST=postgres
@@ -40,4 +49,4 @@ ENV POSTGRES_PASSWORD=metrics_password
 
 EXPOSE 50051
 
-CMD ["./build/metrics-service"]
+CMD ["./metrics-service"]

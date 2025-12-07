@@ -1,21 +1,11 @@
 #include <iostream>
 #include <cstdlib>
-#include <csignal>
 #include "database.h"
 #include "metrics.h"
 
-volatile sig_atomic_t shutdown_requested = 0;
-
-void signal_handler(int signal) {
-    std::cout << "\nReceived signal " << signal << ", shutting down..." << std::endl;
-    shutdown_requested = 1;
-}
 
 int main(int argc, char* argv[]) {
     std::cout << "Metrics service starting..." << std::endl;
-
-    std::signal(SIGINT, signal_handler);
-    std::signal(SIGTERM, signal_handler);
 
     DatabaseConfig db_config = load_database_config();
     

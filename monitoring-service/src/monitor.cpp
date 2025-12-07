@@ -16,9 +16,9 @@ void run_monitoring_loop() {
     db_init();
 
     std::vector<Service> services = {
-        {"service1", "http://localhost:8080/health"},
-        {"service2", "http://localhost:8081/health"},
-        {"service3", "http://localhost:8082/health"}
+        {"service1", "http://localhost:8080/health/ping"},
+        {"service2", "http://localhost:8081/health/ping"},
+        {"service3", "http://localhost:8082/health/ping"}
     };
 
     while (true) {

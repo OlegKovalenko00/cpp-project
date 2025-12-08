@@ -1,0 +1,56 @@
+services:
+
+  postgres-service:
+    image: postgres:16-alpine
+    container_name: monitoring-postgres
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - monitoring_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    networks:
+      - monitoring-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  monitoring-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: monitoring-service
+    ports:
+      - "8083:8083"
+    environment:
+      - HTTP_PORT=8083
+      - POSTGRES_HOST=postgres-service
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - API_SERVICE_HOST=host.docker.internal
+      - API_SERVICE_PORT=8080
+      - METRICS_SERVICE_HOST=host.docker.internal
+      - METRICS_SERVICE_PORT=8081
+      - AGGREGATION_SERVICE_HOST=host.docker.internal
+      - AGGREGATION_SERVICE_PORT=8082
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres-service:
+        condition: service_healthy
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+
+volumes:
+  monitoring_postgres_data:
+
+
+networks:
+  monitoring-network:
+    driver: bridge

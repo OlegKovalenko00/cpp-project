@@ -30,7 +30,7 @@ RUN protoc --proto_path=/app/proto \
 
 RUN mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
 
-FROM debian:bookworm
+FROM gcc:13-bookworm
 
 WORKDIR /app
 
@@ -42,7 +42,6 @@ RUN apt-get update && apt-get install -y \
     libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local/lib64/libstdc++.so.6* /usr/lib/x86_64-linux-gnu/
 COPY --from=builder /app/build/metrics-service .
 
 ENV GRPC_PORT=50051

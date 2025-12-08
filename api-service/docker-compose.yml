@@ -1,0 +1,18 @@
+services:
+  api-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: api-service
+    ports:
+      - "8080:8080"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8080
+    restart: unless-stopped
+    networks:
+      - api-service-network
+
+networks:
+  api-service-network:
+    driver: bridge

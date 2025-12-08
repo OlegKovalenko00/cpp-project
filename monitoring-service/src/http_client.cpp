@@ -1,33 +1,62 @@
 #include "http_client.h"
-#include "httplib.h"
-#include <iostream>
 
-bool check_health(const std::string& url, std::string& msg) {
+#include <httplib.h>
+#include <nlohmann/json.hpp>
+
+namespace {
+httplib::Client make_client(const std::string& host, int port) {
+    httplib::Client cli(host, port);
+    cli.set_connection_timeout(5);
+    cli.set_read_timeout(5);
+    return cli;
+}
+} 
+
+PingResult check_ping(const std::string& host, int port) {
+    PingResult result{false, 0, ""};
     try {
-        auto protocol_end = url.find("://");
-        auto host_start = protocol_end + 3;
-
-        auto path_start = url.find('/', host_start);
-        std::string host_port = url.substr(host_start, path_start - host_start);
-        std::string path = url.substr(path_start);
-
-        auto colon_pos = host_port.find(':');
-        std::string host = host_port.substr(0, colon_pos);
-        int port = std::stoi(host_port.substr(colon_pos + 1));
-
-        httplib::Client cli(host, port);
-        auto res = cli.Get(path.c_str());
-
-        if (res && res->status == 200) {
-            msg = "OK";
-            return true;
-        } else {
-            msg = "Bad Response or non-200 status";
-            return false;
+        auto cli = make_client(host, port);
+        auto res = cli.Get("/health/ping");
+        if (!res) {
+            result.message = "unreachable";
+            return result;
         }
+        result.reachable = true;
+        result.status_code = res->status;
+        result.message = res->status == 200 ? "OK" : "Bad status";
+        return result;
+    } catch (const std::exception& e) {
+        result.message = e.what();
+        return result;
     }
-    catch (const std::exception& e) {
-        msg = e.what();
-        return false;
+}
+
+ReadyResult check_ready(const std::string& host, int port) {
+    ReadyResult result{false, 0, false, "", ""};
+    try {
+        auto cli = make_client(host, port);
+        auto res = cli.Get("/health/ready");
+        if (!res) {
+            result.message = "unreachable";
+            return result;
+        }
+        result.reachable = true;
+        result.status_code = res->status;
+
+        if (res->status == 200 || res->status == 503) {
+            try {
+                auto json = nlohmann::json::parse(res->body);
+                result.db_connected = json.value("database_connected", false);
+                result.service_status = json.value("status", std::string{});
+            } catch (const std::exception& e) {
+                result.message = std::string("parse error: ") + e.what();
+            }
+        } else {
+            result.message = "unexpected status";
+        }
+        return result;
+    } catch (const std::exception& e) {
+        result.message = e.what();
+        return result;
     }
 }

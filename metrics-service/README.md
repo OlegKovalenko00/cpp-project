@@ -1,40 +1,60 @@
 # Metrics Service
 
-Микросервис для сбора и хранения веб-аналитики. Написан на C++23 с использованием gRPC для коммуникации между сервисами.
+Микросервис для сбора, хранения и предоставления веб-аналитики. Написан на C++23.
 
 ## Что сделано
 
-На данный момент реализован полноценный gRPC-сервер, который умеет:
+Реализован полноценный сервис с тремя интерфейсами:
 
-1. Получать просмотры страниц (GetPageViews)
-2. Получать клики пользователей (GetClicks)  
-3. Получать метрики производительности - TTFB, FCP, LCP (GetPerformance)
-4. Получать ошибки на клиенте (GetErrors)
-5. Получать кастомные события (GetCustomEvents)
+### gRPC API (порт 50051)
+
+Методы для получения метрик:
+- `GetPageViews` — просмотры страниц
+- `GetClicks` — клики пользователей
+- `GetPerformance` — метрики производительности (TTFB, FCP, LCP)
+- `GetErrors` — ошибки на клиенте
+- `GetCustomEvents` — кастомные события
 
 Все методы поддерживают фильтрацию по user_id, page, временному диапазону и пагинацию.
+
+### HTTP API (порт 8080)
+
+Эндпоинты для health checks (используется monitoring-service):
+- `GET /health/ping` — liveness probe, возвращает статус сервиса
+- `GET /health/ready` — readiness probe, проверяет подключение к БД
+- `GET /health` — общий health check
+- `GET /ping` — простой ping/pong
+
+### RabbitMQ Consumer
+
+Слушает очередь `metrics_events` и обрабатывает входящие события от api-service.
 
 ## Стек технологий
 
 - C++23
-- gRPC + Protobuf для API
-- PostgreSQL для хранения данных
-- libpqxx для работы с БД
+- gRPC + Protobuf для API между сервисами
+- cpp-httplib для HTTP endpoints
+- AMQP-CPP для работы с RabbitMQ
+- PostgreSQL + libpqxx для хранения данных
 - Docker + Docker Compose для деплоя
-- CMake для сборки
+- CMake + FetchContent для сборки
 
 ## Структура проекта
 
 ```
 metrics-service/
 ├── include/
-│   ├── database.h      # Конфигурация подключения к БД
-│   └── metrics.h       # gRPC сервис
+│   ├── database.h       — конфигурация подключения к БД
+│   ├── metrics.h        — gRPC сервис
+│   ├── rabbitmq.h       — RabbitMQ consumer
+│   └── http_handler.h   — HTTP сервер
 ├── src/
-│   ├── main.cpp        # Точка входа, запуск сервера
-│   ├── database.cpp    # Работа с PostgreSQL
-│   └── metrics.cpp     # Реализация gRPC методов
-├── init.sql            # Схема БД и тестовые данные
+│   ├── main.cpp         — точка входа
+│   ├── database.cpp     — работа с PostgreSQL
+│   ├── metrics.cpp      — реализация gRPC методов
+│   ├── rabbitmq.cpp     — подключение к RabbitMQ
+│   └── http_handler.cpp — HTTP endpoints
+├── init.sql             — схема БД и тестовые данные
 ├── Dockerfile
 ├── docker-compose.yml
 └── CMakeLists.txt
@@ -47,38 +67,65 @@ cd metrics-service
 docker compose up --build
 ```
 
-Сервис запустится на порту 50051, PostgreSQL на 5432.
+Сервисы:
+- metrics-service: gRPC на 50051, HTTP на 8080
+- PostgreSQL: 5432
+- RabbitMQ: 5672 (AMQP), 15672 (Management UI)
 
 ## Как проверить
 
-Использую grpcurl для тестирования (запускать из корня проекта):
+### HTTP endpoints
 
 ```bash
-grpcurl -plaintext -import-path ./proto -proto metrics.proto -d '{}' \
-  localhost:50051 metricsys.MetricsService/GetPageViews
-
-grpcurl -plaintext -import-path ./proto -proto metrics.proto -d '{}' \
-  localhost:50051 metricsys.MetricsService/GetClicks
-
-grpcurl -plaintext -import-path ./proto -proto metrics.proto -d '{
-  "user_id_filter": "user-001"
-}' localhost:50051 metricsys.MetricsService/GetPageViews
+curl http://localhost:8080/health/ping
+curl http://localhost:8080/health/ready
+curl http://localhost:8080/health
+curl http://localhost:8080/ping
 ```
+
+### gRPC (из корня проекта)
+
+```bash
+grpcurl -plaintext -import-path ./proto -proto metrics.proto \
+  -d '{}' localhost:50051 metricsys.MetricsService/GetPageViews
+
+grpcurl -plaintext -import-path ./proto -proto metrics.proto \
+  -d '{"user_id_filter": "user-001"}' localhost:50051 metricsys.MetricsService/GetPageViews
+```
+
+### RabbitMQ
+
+Management UI: http://localhost:15672 (guest/guest)
 
 ## Схема базы данных
 
-Создаются 5 таблиц:
-- page_views - просмотры страниц
-- click_events - клики
-- performance_events - метрики производительности
-- error_events - ошибки
-- custom_events - кастомные события
+5 таблиц:
+- `page_views` — просмотры страниц
+- `click_events` — клики
+- `performance_events` — метрики производительности
+- `error_events` — ошибки
+- `custom_events` — кастомные события
 
-При первом запуске автоматически добавляются тестовые данные.
+При первом запуске автоматически создаются таблицы и добавляются тестовые данные.
 
-## Особенности реализации
+## Взаимодействие с другими сервисами
 
-- Proto-файл лежит в общей папке proto/ и используется всеми сервисами
-- Генерация gRPC кода происходит внутри Docker-контейнера
-- libpqxx подтягивается через FetchContent (требование проекта)
-- gRPC и Protobuf берутся из системных пакетов Ubuntu
+- **api-service** → отправляет события в RabbitMQ → metrics-service сохраняет в БД
+- **aggregation-service** → запрашивает данные через gRPC
+- **monitoring-service** → проверяет здоровье через HTTP /health/ping и /health/ready
+
+## Переменные окружения
+
+| Переменная | Значение по умолчанию | Описание |
+|------------|----------------------|----------|
+| GRPC_PORT | 50051 | Порт gRPC сервера |
+| HTTP_PORT | 8080 | Порт HTTP сервера |
+| POSTGRES_HOST | postgres | Хост PostgreSQL |
+| POSTGRES_DB | metrics_db | Имя базы данных |
+| POSTGRES_USER | metrics_user | Пользователь БД |
+| POSTGRES_PASSWORD | metrics_password | Пароль БД |
+| RABBITMQ_HOST | rabbitmq | Хост RabbitMQ |
+| RABBITMQ_PORT | 5672 | Порт RabbitMQ |
+| RABBITMQ_USER | guest | Пользователь RabbitMQ |
+| RABBITMQ_PASSWORD | guest | Пароль RabbitMQ |
+| RABBITMQ_QUEUE | metrics_events | Имя очереди |

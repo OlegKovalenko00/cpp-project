@@ -8,6 +8,7 @@
 #include "aggregator.h"
 #include "database.h"
 #include "handlers.h"
+#include "metrics_client.h"
 
 static std::atomic<bool> running{true};
 
@@ -67,6 +68,21 @@ int main() {
     std::string httpHost = GetEnvVar("AGG_HTTP_HOST", "0.0.0.0");
     int httpPort = std::stoi(GetEnvVar("AGG_HTTP_PORT", "8081"));
 
+    // gRPC подключение к metrics-service
+    std::string metricsHost = GetEnvVar("METRICS_GRPC_HOST", "localhost");
+    std::string metricsPort = GetEnvVar("METRICS_GRPC_PORT", "50051");
+
+    std::cout << "Connecting to metrics-service via gRPC at "
+              << metricsHost << ":" << metricsPort << std::endl;
+
+    aggregation::MetricsClient metricsClient(metricsHost, metricsPort);
+
+    if (metricsClient.isConnected()) {
+        std::cout << "MetricsClient: gRPC channel is ready" << std::endl;
+    } else {
+        std::cout << "MetricsClient: gRPC channel is not ready yet (will connect on first request)" << std::endl;
+    }
+
     // Запускаем HTTP сервер в отдельном потоке
     std::thread httpThread([&httpServer, &httpHost, httpPort]() {
         std::cout << "HTTP server listening on " << httpHost << ":" << httpPort << std::endl;
@@ -74,7 +90,7 @@ int main() {
     });
 
     // Запускаем агрегацию
-    aggregation::Aggregator aggregator(database);
+    aggregation::Aggregator aggregator(database, metricsClient);
     aggregator.run();
 
     // Ожидаем завершения (для демонстрации выполняем один раз)

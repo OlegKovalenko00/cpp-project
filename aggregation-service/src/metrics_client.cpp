@@ -28,18 +28,20 @@ metricsys::TimeRange MetricsClient::makeTimeRange(
     std::chrono::system_clock::time_point to
 ) const {
     metricsys::TimeRange range;
-    auto fromMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+    // metrics-service использует to_timestamp(), который ожидает секунды
+    auto fromSec = std::chrono::duration_cast<std::chrono::seconds>(
         from.time_since_epoch()).count();
-    auto toMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+    auto toSec = std::chrono::duration_cast<std::chrono::seconds>(
         to.time_since_epoch()).count();
-    range.set_start_timestamp(fromMs);
-    range.set_end_timestamp(toMs);
+    range.set_start_timestamp(fromSec);
+    range.set_end_timestamp(toSec);
     return range;
 }
 
 std::chrono::system_clock::time_point MetricsClient::timestampToTimePoint(int64_t ts) const {
+    // metrics-service возвращает EXTRACT(EPOCH FROM timestamp) - это секунды
     return std::chrono::system_clock::time_point(
-        std::chrono::milliseconds(ts)
+        std::chrono::seconds(ts)
     );
 }
 

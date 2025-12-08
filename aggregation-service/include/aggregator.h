@@ -10,6 +10,7 @@
 namespace aggregation {
 
 class Database;
+class MetricsClient;
 
 struct RawEvent {
     std::string projectId;
@@ -106,7 +107,7 @@ struct AggregationResult {
 
 class Aggregator {
 public:
-    explicit Aggregator(Database& db);
+    explicit Aggregator(Database& db, MetricsClient& metricsClient);
     ~Aggregator();
 
     void run();
@@ -122,6 +123,7 @@ public:
     static double calculateP95(std::vector<double> values);
 private:
     Database& database_;
+    MetricsClient& metricsClient_;
 };
 
 } // namespace aggregation

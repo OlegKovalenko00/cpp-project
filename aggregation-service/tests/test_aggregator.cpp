@@ -5,6 +5,7 @@
 #include <string>
 #include "aggregator.h"
 #include "database.h"
+#include "metrics_client.h"
 
 using namespace aggregation;
 
@@ -12,6 +13,10 @@ using namespace aggregation;
 bool approxEqual(double a, double b, double epsilon = 0.001) {
     return std::fabs(a - b) < epsilon;
 }
+
+// Глобальные объекты для тестов (не требуют реального подключения)
+Database testDb;
+MetricsClient testMetricsClient("localhost", "50051");  // Не будет реально подключаться в тестах
 
 // ============== Тесты статистических функций ==============
 
@@ -98,8 +103,9 @@ void testCalculateP95() {
 void testAggregatePageViews() {
     std::cout << "testAggregatePageViews... ";
 
-    Database db; // Не подключаемся, используем только для конструктора
-    Aggregator agg(db);
+    Database db;
+    MetricsClient metricsClient("localhost", "50051");
+    Aggregator agg(db, metricsClient);
 
     auto now = std::chrono::system_clock::now();
     std::vector<RawEvent> events;
@@ -131,7 +137,8 @@ void testAggregateClicks() {
     std::cout << "testAggregateClicks... ";
 
     Database db;
-    Aggregator agg(db);
+    MetricsClient metricsClient("localhost", "50051");
+    Aggregator agg(db, metricsClient);
 
     auto now = std::chrono::system_clock::now();
     std::vector<RawEvent> events;
@@ -182,7 +189,8 @@ void testAggregatePerformance() {
     std::cout << "testAggregatePerformance... ";
 
     Database db;
-    Aggregator agg(db);
+    MetricsClient metricsClient("localhost", "50051");
+    Aggregator agg(db, metricsClient);
 
     auto now = std::chrono::system_clock::now();
     std::vector<RawEvent> events;
@@ -219,7 +227,8 @@ void testAggregateErrors() {
     std::cout << "testAggregateErrors... ";
 
     Database db;
-    Aggregator agg(db);
+    MetricsClient metricsClient("localhost", "50051");
+    Aggregator agg(db, metricsClient);
 
     auto now = std::chrono::system_clock::now();
     std::vector<RawEvent> events;
@@ -267,7 +276,8 @@ void testAggregateCustomEvents() {
     std::cout << "testAggregateCustomEvents... ";
 
     Database db;
-    Aggregator agg(db);
+    MetricsClient metricsClient("localhost", "50051");
+    Aggregator agg(db, metricsClient);
 
     auto now = std::chrono::system_clock::now();
     std::vector<RawEvent> events;
@@ -300,7 +310,8 @@ void testTimeBucketGrouping() {
     std::cout << "testTimeBucketGrouping... ";
 
     Database db;
-    Aggregator agg(db);
+    MetricsClient metricsClient("localhost", "50051");
+    Aggregator agg(db, metricsClient);
 
     auto now = std::chrono::system_clock::now();
     std::vector<RawEvent> events;
@@ -338,7 +349,8 @@ void testMixedEventTypes() {
     std::cout << "testMixedEventTypes... ";
 
     Database db;
-    Aggregator agg(db);
+    MetricsClient metricsClient("localhost", "50051");
+    Aggregator agg(db, metricsClient);
 
     auto now = std::chrono::system_clock::now();
     std::vector<RawEvent> events;
@@ -404,7 +416,8 @@ void testEmptyEvents() {
     std::cout << "testEmptyEvents... ";
 
     Database db;
-    Aggregator agg(db);
+    MetricsClient metricsClient("localhost", "50051");
+    Aggregator agg(db, metricsClient);
 
     std::vector<RawEvent> empty;
     auto result = agg.aggregateEvents(empty, std::chrono::minutes(5));

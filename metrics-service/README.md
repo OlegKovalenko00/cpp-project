@@ -2,20 +2,35 @@
 
 Микросервис для сбора, хранения и предоставления веб-аналитики. Написан на C++23.
 
+## Быстрый старт
+
+```bash
+cd metrics-service
+docker-compose up -d
+
+# Проверить логи
+docker-compose logs -f
+# Должны увидеть: "Metrics gRPC server listening on 0.0.0.0:50051"
+```
+
 ## Что сделано
 
-Реализован полноценный сервис с тремя интерфейсами:
+Полноценный gRPC-сервер, который умеет:
 
-### gRPC API (порт 50051)
+1. **GetPageViews** — получать просмотры страниц
+2. **GetClicks** — получать клики пользователей  
+3. **GetPerformance** — получать метрики производительности (TTFB, FCP, LCP)
+4. **GetErrors** — получать ошибки на клиенте
+5. **GetCustomEvents** — получать кастомные события
 
-Методы для получения метрик:
-- `GetPageViews` — просмотры страниц
-- `GetClicks` — клики пользователей
-- `GetPerformance` — метрики производительности (TTFB, FCP, LCP)
-- `GetErrors` — ошибки на клиенте
-- `GetCustomEvents` — кастомные события
+Все методы поддерживают фильтрацию по `user_id`, `page`, `time_range` и пагинацию.
 
-Все методы поддерживают фильтрацию по user_id, page, временному диапазону и пагинацию.
+## Порты
+
+| Сервис | Порт | Описание |
+|--------|------|----------|
+| gRPC сервер | 50051 | API для других сервисов |
+| PostgreSQL | 5433 | База данных metrics_db |
 
 ### HTTP API (порт 8080)
 
@@ -60,72 +75,49 @@ metrics-service/
 └── CMakeLists.txt
 ```
 
-## Как запустить
-
-```bash
-cd metrics-service
-docker compose up --build
-```
-
-Сервисы:
-- metrics-service: gRPC на 50051, HTTP на 8080
-- PostgreSQL: 5432
-- RabbitMQ: 5672 (AMQP), 15672 (Management UI)
-
 ## Как проверить
 
-### HTTP endpoints
+Использую grpcurl для тестирования:
 
 ```bash
-curl http://localhost:8080/health/ping
-curl http://localhost:8080/health/ready
-curl http://localhost:8080/health
-curl http://localhost:8080/ping
+# Получить все page views
+grpcurl -plaintext -import-path ./proto -proto metrics.proto -d '{}' \
+  localhost:50051 metricsys.MetricsService/GetPageViews
+
+# Получить clicks
+grpcurl -plaintext -import-path ./proto -proto metrics.proto -d '{}' \
+  localhost:50051 metricsys.MetricsService/GetClicks
+
+# Фильтрация по user_id
+grpcurl -plaintext -import-path ./proto -proto metrics.proto -d '{
+  "user_id_filter": "user-001"
+}' localhost:50051 metricsys.MetricsService/GetPageViews
 ```
 
-### gRPC (из корня проекта)
-
+Или через aggregation-service:
 ```bash
-grpcurl -plaintext -import-path ./proto -proto metrics.proto \
-  -d '{}' localhost:50051 metricsys.MetricsService/GetPageViews
-
-grpcurl -plaintext -import-path ./proto -proto metrics.proto \
-  -d '{"user_id_filter": "user-001"}' localhost:50051 metricsys.MetricsService/GetPageViews
+cd ../aggregation-service/build
+./test_grpc_connection localhost 50051
 ```
-
-### RabbitMQ
-
-Management UI: http://localhost:15672 (guest/guest)
 
 ## Схема базы данных
 
-5 таблиц:
+Создаются 5 таблиц:
 - `page_views` — просмотры страниц
 - `click_events` — клики
 - `performance_events` — метрики производительности
 - `error_events` — ошибки
 - `custom_events` — кастомные события
 
-При первом запуске автоматически создаются таблицы и добавляются тестовые данные.
+Management UI: http://localhost:15672 (guest/guest)
 
-## Взаимодействие с другими сервисами
+## Интеграция с aggregation-service
 
-- **api-service** → отправляет события в RabbitMQ → metrics-service сохраняет в БД
-- **aggregation-service** → запрашивает данные через gRPC
-- **monitoring-service** → проверяет здоровье через HTTP /health/ping и /health/ready
+aggregation-service подключается к этому сервису через gRPC и запрашивает события для агрегации:
 
-## Переменные окружения
-
-| Переменная | Значение по умолчанию | Описание |
-|------------|----------------------|----------|
-| GRPC_PORT | 50051 | Порт gRPC сервера |
-| HTTP_PORT | 8080 | Порт HTTP сервера |
-| POSTGRES_HOST | postgres | Хост PostgreSQL |
-| POSTGRES_DB | metrics_db | Имя базы данных |
-| POSTGRES_USER | metrics_user | Пользователь БД |
-| POSTGRES_PASSWORD | metrics_password | Пароль БД |
-| RABBITMQ_HOST | rabbitmq | Хост RabbitMQ |
-| RABBITMQ_PORT | 5672 | Порт RabbitMQ |
-| RABBITMQ_USER | guest | Пользователь RabbitMQ |
-| RABBITMQ_PASSWORD | guest | Пароль RabbitMQ |
-| RABBITMQ_QUEUE | metrics_events | Имя очереди |
+```
+aggregation-service  ──gRPC:50051──►  metrics-service
+                                            │
+                                            ▼
+                                      PostgreSQL:5433
+```

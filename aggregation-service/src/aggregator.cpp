@@ -1,5 +1,6 @@
 #include "aggregator.h"
 #include "database.h"
+#include "metrics_client.h"
 
 #include <iostream>
 #include <algorithm>
@@ -8,7 +9,8 @@
 
 namespace aggregation {
 
-Aggregator::Aggregator(Database& db) : database_(db) {
+Aggregator::Aggregator(Database& db, MetricsClient& metricsClient)
+    : database_(db), metricsClient_(metricsClient) {
 }
 
 Aggregator::~Aggregator() = default;
@@ -24,60 +26,65 @@ void Aggregator::run() {
               << std::chrono::duration_cast<std::chrono::seconds>(watermark.time_since_epoch()).count()
               << " seconds" << std::endl;
 
-    // 2. TODO: Когда metrics-service будет готов, заменить на:
-    // MetricsClient client("localhost", "50051");
-    // auto rawEvents = client.fetchAllEvents(watermark, now);
+    // 2. Получаем события от metrics-service через gRPC
+    std::vector<RawEvent> rawEvents;
 
-    // Пока создаём тестовые события для проверки
-    std::vector<RawEvent> testEvents;
+    if (metricsClient_.isConnected()) {
+        std::cout << "Fetching events from metrics-service via gRPC..." << std::endl;
+        rawEvents = metricsClient_.fetchAllEvents(watermark, now);
+        std::cout << "Received " << rawEvents.size() << " events from metrics-service" << std::endl;
+    } else {
+        std::cout << "Warning: metrics-service not available, using test data" << std::endl;
 
-    // Тестовые page_view события
-    for (int i = 0; i < 5; ++i) {
-        RawEvent e;
-        e.projectId = "test-project";
-        e.page = "/home";
-        e.eventType = "page_view";
-        e.userId = "user-" + std::to_string(i % 3);
-        e.sessionId = "session-" + std::to_string(i);
-        e.timestamp = now - std::chrono::minutes(i);
-        testEvents.push_back(e);
+        // Fallback: создаём тестовые события для проверки
+        // Тестовые page_view события
+        for (int i = 0; i < 5; ++i) {
+            RawEvent e;
+            e.projectId = "test-project";
+            e.page = "/home";
+            e.eventType = "page_view";
+            e.userId = "user-" + std::to_string(i % 3);
+            e.sessionId = "session-" + std::to_string(i);
+            e.timestamp = now - std::chrono::minutes(i);
+            rawEvents.push_back(e);
+        }
+
+        // Тестовые performance события
+        for (int i = 0; i < 3; ++i) {
+            RawEvent e;
+            e.projectId = "test-project";
+            e.page = "/home";
+            e.eventType = "performance";
+            e.userId = "user-" + std::to_string(i);
+            e.sessionId = "session-perf-" + std::to_string(i);
+            e.timestamp = now - std::chrono::minutes(i);
+            e.totalPageLoadMs = 100.0 + i * 50.0;
+            e.ttfbMs = 20.0 + i * 5.0;
+            e.fcpMs = 50.0 + i * 10.0;
+            e.lcpMs = 80.0 + i * 15.0;
+            rawEvents.push_back(e);
+        }
+
+        // Тестовые error события
+        {
+            RawEvent e;
+            e.projectId = "test-project";
+            e.page = "/checkout";
+            e.eventType = "error";
+            e.isError = true;
+            e.errorType = "NetworkError";
+            e.errorMessage = "Failed to fetch";
+            e.severity = 2; // ERROR
+            e.userId = "user-1";
+            e.timestamp = now;
+            rawEvents.push_back(e);
+        }
     }
 
-    // Тестовые performance события
-    for (int i = 0; i < 3; ++i) {
-        RawEvent e;
-        e.projectId = "test-project";
-        e.page = "/home";
-        e.eventType = "performance";
-        e.userId = "user-" + std::to_string(i);
-        e.sessionId = "session-perf-" + std::to_string(i);
-        e.timestamp = now - std::chrono::minutes(i);
-        e.totalPageLoadMs = 100.0 + i * 50.0;
-        e.ttfbMs = 20.0 + i * 5.0;
-        e.fcpMs = 50.0 + i * 10.0;
-        e.lcpMs = 80.0 + i * 15.0;
-        testEvents.push_back(e);
-    }
-
-    // Тестовые error события
-    {
-        RawEvent e;
-        e.projectId = "test-project";
-        e.page = "/checkout";
-        e.eventType = "error";
-        e.isError = true;
-        e.errorType = "NetworkError";
-        e.errorMessage = "Failed to fetch";
-        e.severity = 2; // ERROR
-        e.userId = "user-1";
-        e.timestamp = now;
-        testEvents.push_back(e);
-    }
-
-    std::cout << "Created " << testEvents.size() << " test events" << std::endl;
+    std::cout << "Processing " << rawEvents.size() << " events" << std::endl;
 
     // 3. Агрегируем события (5-минутные бакеты)
-    auto result = aggregateEvents(testEvents, std::chrono::minutes(5));
+    auto result = aggregateEvents(rawEvents, std::chrono::minutes(5));
 
     // 4. Записываем в БД
     bool success = database_.writeAggregationResult(result);

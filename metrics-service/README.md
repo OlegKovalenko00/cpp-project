@@ -1,6 +1,6 @@
 # Metrics Service
 
-Микросервис для сбора и хранения веб-аналитики. Написан на C++23 с использованием gRPC для коммуникации между сервисами.
+Микросервис для сбора, хранения и предоставления веб-аналитики. Написан на C++23.
 
 ## Быстрый старт
 
@@ -32,27 +32,44 @@ docker-compose logs -f
 | gRPC сервер | 50051 | API для других сервисов |
 | PostgreSQL | 5433 | База данных metrics_db |
 
+### HTTP API (порт 8080)
+
+Эндпоинты для health checks (используется monitoring-service):
+- `GET /health/ping` — liveness probe, возвращает статус сервиса
+- `GET /health/ready` — readiness probe, проверяет подключение к БД
+- `GET /health` — общий health check
+- `GET /ping` — простой ping/pong
+
+### RabbitMQ Consumer
+
+Слушает очередь `metrics_events` и обрабатывает входящие события от api-service.
+
 ## Стек технологий
 
 - C++23
-- gRPC + Protobuf для API
-- PostgreSQL для хранения данных
-- libpqxx для работы с БД
+- gRPC + Protobuf для API между сервисами
+- cpp-httplib для HTTP endpoints
+- AMQP-CPP для работы с RabbitMQ
+- PostgreSQL + libpqxx для хранения данных
 - Docker + Docker Compose для деплоя
-- CMake для сборки
+- CMake + FetchContent для сборки
 
 ## Структура проекта
 
 ```
 metrics-service/
 ├── include/
-│   ├── database.h      # Конфигурация подключения к БД
-│   └── metrics.h       # gRPC сервис
+│   ├── database.h       — конфигурация подключения к БД
+│   ├── metrics.h        — gRPC сервис
+│   ├── rabbitmq.h       — RabbitMQ consumer
+│   └── http_handler.h   — HTTP сервер
 ├── src/
-│   ├── main.cpp        # Точка входа, запуск сервера
-│   ├── database.cpp    # Работа с PostgreSQL
-│   └── metrics.cpp     # Реализация gRPC методов
-├── init.sql            # Схема БД и тестовые данные
+│   ├── main.cpp         — точка входа
+│   ├── database.cpp     — работа с PostgreSQL
+│   ├── metrics.cpp      — реализация gRPC методов
+│   ├── rabbitmq.cpp     — подключение к RabbitMQ
+│   └── http_handler.cpp — HTTP endpoints
+├── init.sql             — схема БД и тестовые данные
 ├── Dockerfile
 ├── docker-compose.yml
 └── CMakeLists.txt
@@ -92,7 +109,7 @@ cd ../aggregation-service/build
 - `error_events` — ошибки
 - `custom_events` — кастомные события
 
-При первом запуске автоматически добавляются тестовые данные.
+Management UI: http://localhost:15672 (guest/guest)
 
 ## Интеграция с aggregation-service
 

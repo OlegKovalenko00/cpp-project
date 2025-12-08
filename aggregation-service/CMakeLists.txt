@@ -92,3 +92,7 @@ add_test(NAME test_aggregator COMMAND test_aggregator)
 add_executable(test_database tests/test_database.cpp)
 target_link_libraries(test_database PRIVATE aggregation-core)
 add_test(NAME test_database COMMAND test_database)
+
+add_executable(test_grpc_connection tests/test_grpc_connection.cpp)
+target_link_libraries(test_grpc_connection PRIVATE aggregation-core)
+

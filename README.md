@@ -1,42 +1,96 @@
 # MetricSys
 
-**MetricSys** — микросервисная система для сбора, агрегации и предоставления метрик, а также мониторинга состояния сервисов.
+**MetricSys** — микросервисная система для сбора, агрегации и предоставления метрик веб-аналитики.
 
-Проект состоит из четырёх независимых C++-сервисов, взаимодействующих через PostgreSQL и запускаемых в Docker.
+Проект состоит из четырёх независимых C++-сервисов, взаимодействующих через gRPC и PostgreSQL.
+
+## Быстрый старт
+
+```bash
+# 1. Запустить metrics-service
+cd metrics-service
+docker-compose up -d
+
+# 2. Запустить aggregation-service  
+cd ../aggregation-service
+docker-compose up -d
+mkdir -p build && cd build
+cmake .. && make -j$(nproc)
+./aggregation-service
+```
 
 ## Архитектура
 
-- **metrics-service** — сбор и запись метрик в базу данных.
-- **aggregation-service** — агрегация метрик (среднее, минимум, максимум) и сохранение результатов.
-- **api-service** — REST API для получения метрик и агрегированных данных.
-- **monitoring-service** — health-check сервисов и логирование в БД.
+```
+┌─────────────┐     RabbitMQ  ┌───────────────────┐
+│ api-service │◄─────────────►│  metrics-service  │
+│  (REST API) │               │   (gRPC:50051)    │
+└──────┬──────┘               └─────────┬─────────┘
+       │                                │
+       │                                │ gRPC
+       │                                ▼
+       │                      ┌───────────────────┐
+       │                      │aggregation-service│
+       │                      │   (HTTP:8081)     │
+       │                      └─────────┬─────────┘
+       │                                │
+       ▼                                ▼
+┌─────────────────────────────────────────────────┐
+│                   PostgreSQL                    │
+│  metrics_db:5433  │  aggregation_db:5434        │
+└─────────────────────────────────────────────────┘
+       ▲
+       │
+┌──────┴──────┐
+│ monitoring  │
+│   service   │
+└─────────────┘
+```
 
-База данных: **PostgreSQL**
+## Сервисы
 
-Контейнеризация: **Docker + Docker Compose**
+| Сервис | Порт | Описание |
+|--------|------|----------|
+| **metrics-service** | gRPC:50051, PG:5433 | Сбор и хранение сырых метрик |
+| **aggregation-service** | HTTP:8081, PG:5434 | Агрегация метрик в 5-минутные бакеты |
+| **api-service** | HTTP:8080 | REST API для получения данных |
+| **monitoring-service** | - | Health-check и логирование |
+
+## Типы метрик
+
+- **Page Views** — просмотры страниц
+- **Clicks** — клики по элементам
+- **Performance** — TTFB, FCP, LCP, total page load
+- **Errors** — ошибки на клиенте (warning/error/critical)
+- **Custom Events** — кастомные события
+
+## Технологии
+
+* C++23
+* gRPC + Protobuf
+* PostgreSQL
+* Docker / Docker Compose
+* CMake
+* httplib (HTTP сервер)
 
 ## Структура проекта
 
 ```
+cpp-project/
+├── proto/
+│   └── metrics.proto         # Общий proto для gRPC
+├── metrics-service/          # Сбор метрик
+├── aggregation-service/      # Агрегация метрик
+├── api-service/              # REST API
+├── monitoring-service/       # Мониторинг
+└── README.md
+```
 
-metrics-service/
-aggregation-service/
-api-service/
-monitoring-service/
-docker-compose.yml
+## Документация
 
-````
-
-## Запуск
-
-```bash
-docker-compose up --build
-````
-
-## Используемые технологии
-
-* C++
-* PostgreSQL
-* Docker / Docker Compose
-* CMake
+Подробные инструкции в README каждого сервиса:
+- [metrics-service/README.md](metrics-service/README.md)
+- [aggregation-service/README.md](aggregation-service/README.md)
+- [api-service/README.md](api-service/README.md)
+- [monitoring-service/README.md](monitoring-service/README.md)
 

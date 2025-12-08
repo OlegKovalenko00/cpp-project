@@ -11,7 +11,12 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
     GIT_TAG        v0.18.3
 )
-FetchContent_MakeAvailable(httplib)
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+)
+FetchContent_MakeAvailable(httplib json)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 add_executable(monitoring-service ${SOURCES})
@@ -32,7 +37,7 @@ if(PQ_LIBRARY)
     target_link_libraries(monitoring-service PRIVATE ${PQ_LIBRARY})
 endif()
 
-target_link_libraries(monitoring-service PRIVATE httplib::httplib)
+target_link_libraries(monitoring-service PRIVATE httplib::httplib nlohmann_json::nlohmann_json)
 
 add_custom_target(run
     COMMAND $<TARGET_FILE:monitoring-service>

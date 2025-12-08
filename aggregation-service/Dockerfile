@@ -8,16 +8,26 @@ RUN apt-get update && apt-get install -y \
     libgrpc++-dev \
     libprotobuf-dev \
     protobuf-compiler-grpc \
+    pkg-config \
+    libssl-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY CMakeLists.txt .
-COPY include/ include/
-COPY src/ src/
-COPY ../proto/ ../proto/
+# Копируем proto из корня проекта
+COPY proto/ proto/
 
-RUN mkdir -p build && cd build && cmake .. && make -j$(nproc)
+# Копируем файлы aggregation-service
+COPY aggregation-service/CMakeLists.txt aggregation-service/
+COPY aggregation-service/include/ aggregation-service/include/
+COPY aggregation-service/src/ aggregation-service/src/
 
-FROM debian:bookworm-slim
+WORKDIR /app/aggregation-service
+
+# Собираем проект - httplib и json скачиваются через CMake FetchContent
+RUN mkdir -p build && cd build && \
+    cmake .. && make -j$(nproc)
+
+FROM gcc:13-bookworm
 
 WORKDIR /app
 
@@ -25,10 +35,12 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     libgrpc++1.51 \
     libprotobuf32 \
+    libssl3 \
+    libbrotli1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/build/aggregation-service .
+COPY --from=builder /app/aggregation-service/build/aggregation-service .
 
-EXPOSE 50052
+EXPOSE 8081
 
 CMD ["./aggregation-service"]

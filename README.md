@@ -7,16 +7,8 @@
 ## Быстрый старт
 
 ```bash
-# 1. Запустить metrics-service
-cd metrics-service
-docker-compose up -d
-
-# 2. Запустить aggregation-service  
-cd ../aggregation-service
-docker-compose up -d
-mkdir -p build && cd build
-cmake .. && make -j$(nproc)
-./aggregation-service
+chmod +x run.sh  
+./run.sh   
 ```
 
 ## Архитектура

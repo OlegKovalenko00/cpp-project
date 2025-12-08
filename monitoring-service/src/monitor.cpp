@@ -1,10 +1,12 @@
 #include "monitor.h"
+
 #include "http_client.h"
 #include "logging.h"
 
+#include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <thread>
-#include <chrono>
 #include <vector>
 
 struct Service {
@@ -15,15 +17,33 @@ struct Service {
     std::chrono::steady_clock::time_point last_ready;
 };
 
+static std::string get_env(const char* name, const std::string& default_value) {
+    const char* val = std::getenv(name);
+    return val ? val : default_value;
+}
+
+static int get_env_int(const char* name, int default_value) {
+    const char* val = std::getenv(name);
+    return val ? std::stoi(val) : default_value;
+}
+
 void run_monitoring_loop() {
     const auto ping_interval = std::chrono::seconds(15);
     const auto ready_interval = std::chrono::seconds(45);
     auto now = std::chrono::steady_clock::now();
 
     std::vector<Service> services = {
-        {"metrics-service", "metrics-service", 8080, now - ping_interval, now - ready_interval},
-        {"aggregation-service", "aggregation-service", 8080, now - ping_interval, now - ready_interval}
-    };
+        {"api-service", get_env("API_SERVICE_HOST", "api-service"),
+         get_env_int("API_SERVICE_PORT", 8080), now - ping_interval, now - ready_interval},
+        {"metrics-service", get_env("METRICS_SERVICE_HOST", "metrics-service"),
+         get_env_int("METRICS_SERVICE_PORT", 8081), now - ping_interval, now - ready_interval},
+        {"aggregation-service", get_env("AGGREGATION_SERVICE_HOST", "aggregation-service"),
+         get_env_int("AGGREGATION_SERVICE_PORT", 8082), now - ping_interval, now - ready_interval}};
+
+    log_info("Monitoring started. Targets:");
+    for (const auto& s : services) {
+        log_info("  " + s.name + " -> " + s.host + ":" + std::to_string(s.port));
+    }
 
     while (true) {
         now = std::chrono::steady_clock::now();
@@ -36,10 +56,11 @@ void run_monitoring_loop() {
                 if (!ping.reachable) {
                     log_error(service.name + " unreachable (liveness failed)");
                 } else if (ping.status_code == 200) {
-                    log_info(service.name + " is alive");
-                    log_debug(service.name + " heartbeat ok");
+                    log_info(service.name + " IS ALIVE");
+                    log_debug(service.name + " HEARTBEAT OK");
                 } else {
-                    log_error(service.name + " liveness failed, status=" + std::to_string(ping.status_code));
+                    log_error(service.name +
+                              " liveness failed, status=" + std::to_string(ping.status_code));
                 }
             }
 
@@ -58,7 +79,8 @@ void run_monitoring_loop() {
                         log_warning(service.name + " dependency failure (DB disconnected)");
                     }
                 } else {
-                    log_warning(service.name + " readiness unexpected status=" + std::to_string(ready.status_code));
+                    log_warning(service.name + " readiness unexpected status=" +
+                                std::to_string(ready.status_code));
                 }
             }
         }

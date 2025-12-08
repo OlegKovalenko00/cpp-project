@@ -1,6 +1,7 @@
 services:
   agg-postgres:
     image: postgres:16
+    container_name: agg-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: aggregation_db
@@ -10,6 +11,41 @@ services:
       - "5434:5432"
     volumes:
       - agg_pgdata:/var/lib/postgresql/data
+    networks:
+      - aggregation-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agguser -d aggregation_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  aggregation-service:
+    build:
+      context: ..
+      dockerfile: aggregation-service/Dockerfile
+    container_name: aggregation-service
+    ports:
+      - "8081:8081"
+    environment:
+      - AGG_DB_HOST=agg-postgres
+      - AGG_DB_PORT=5432
+      - AGG_DB_NAME=aggregation_db
+      - AGG_DB_USER=agguser
+      - AGG_DB_PASSWORD=aggpassword
+      - AGG_HTTP_HOST=0.0.0.0
+      - AGG_HTTP_PORT=8081
+      - METRICS_GRPC_HOST=metrics-service
+      - METRICS_GRPC_PORT=50051
+    depends_on:
+      agg-postgres:
+        condition: service_healthy
+    networks:
+      - aggregation-network
+    restart: unless-stopped
+
+networks:
+  aggregation-network:
+    driver: bridge
 
 volumes:
   agg_pgdata:

@@ -10,6 +10,25 @@ pkg_check_modules(LIBPQ REQUIRED libpq)
 find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
 
+# httplib (header-only)
+include(FetchContent)
+FetchContent_Declare(
+    httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.18.3
+)
+
+# nlohmann/json
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+
+FetchContent_MakeAvailable(httplib json)
+
+find_package(OpenSSL REQUIRED)
+
 find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin)
 
 # Используем общий proto из корня проекта
@@ -40,6 +59,7 @@ add_library(aggregation-core
         src/aggregator.cpp
         src/database.cpp
         src/metrics_client.cpp
+        src/handlers.cpp
         ${PROTO_SRCS}
         ${GRPC_SRCS}
 )
@@ -54,6 +74,10 @@ target_link_libraries(aggregation-core PUBLIC
         ${LIBPQ_LIBRARIES}
         protobuf::libprotobuf
         gRPC::grpc++
+        httplib::httplib
+        nlohmann_json::nlohmann_json
+        OpenSSL::SSL
+        OpenSSL::Crypto
 )
 
 add_executable(aggregation-service src/main.cpp)

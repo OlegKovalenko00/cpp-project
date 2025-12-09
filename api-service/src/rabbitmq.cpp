@@ -1,23 +1,110 @@
-#include "rabbitmq.h"
+#include "rabbitmq.hpp"
+#include <iostream>
+#include <cstring>
 
 RabbitMQ::RabbitMQ(const std::string& host, int port, const std::string& username,
-                   const std::string& password, const std::string& vhost) {
-    AMQP::Address address(host, port, AMQP::Login(username, password), vhost);
-    connection_ = new AMQP::TcpConnection(new AMQP::LibEventHandler(), address);
-    channel_ = new AMQP::TcpChannel(connection_);
+                   const std::string& password, const std::string& vhost)
+    : host_(host), port_(port), username_(username), password_(password), vhost_(vhost) {
 }
 
 RabbitMQ::~RabbitMQ() {
-    delete channel_;
-    delete connection_;
+    if (conn_) {
+        if (connected_) {
+            amqp_channel_close(conn_, 1, AMQP_REPLY_SUCCESS);
+            amqp_connection_close(conn_, AMQP_REPLY_SUCCESS);
+        }
+        amqp_destroy_connection(conn_);
+    }
+}
+
+bool RabbitMQ::connect() {
+    conn_ = amqp_new_connection();
+    if (!conn_) {
+        std::cerr << "[RabbitMQ] Failed to create connection" << std::endl;
+        return false;
+    }
+
+    socket_ = amqp_tcp_socket_new(conn_);
+    if (!socket_) {
+        std::cerr << "[RabbitMQ] Failed to create TCP socket" << std::endl;
+        return false;
+    }
+
+    int status = amqp_socket_open(socket_, host_.c_str(), port_);
+    if (status != AMQP_STATUS_OK) {
+        std::cerr << "[RabbitMQ] Failed to open socket: " << amqp_error_string2(status) << std::endl;
+        return false;
+    }
+
+    amqp_rpc_reply_t reply = amqp_login(conn_, vhost_.c_str(), 0, 131072, 0,
+                                         AMQP_SASL_METHOD_PLAIN,
+                                         username_.c_str(), password_.c_str());
+    if (reply.reply_type != AMQP_RESPONSE_NORMAL) {
+        std::cerr << "[RabbitMQ] Login failed" << std::endl;
+        return false;
+    }
+
+    amqp_channel_open(conn_, 1);
+    if (!checkRpcReply("Opening channel")) {
+        return false;
+    }
+
+    // Объявляем очереди
+    const char* queues[] = {"page_views", "clicks", "performance_events", "error_events", "custom_events"};
+    for (const char* queue : queues) {
+        amqp_queue_declare(conn_, 1, amqp_cstring_bytes(queue),
+                          0,  // passive
+                          1,  // durable
+                          0,  // exclusive
+                          0,  // auto_delete
+                          amqp_empty_table);
+        if (!checkRpcReply("Declaring queue")) {
+            std::cerr << "[RabbitMQ] Failed to declare queue: " << queue << std::endl;
+        } else {
+            std::cout << "[RabbitMQ] Queue declared: " << queue << std::endl;
+        }
+    }
+
+    connected_ = true;
+    std::cout << "[RabbitMQ] Connected to " << host_ << ":" << port_ << std::endl;
+    return true;
+}
+
+bool RabbitMQ::checkRpcReply(const char* context) {
+    amqp_rpc_reply_t reply = amqp_get_rpc_reply(conn_);
+    if (reply.reply_type != AMQP_RESPONSE_NORMAL) {
+        std::cerr << "[RabbitMQ] " << context << " failed" << std::endl;
+        return false;
+    }
+    return true;
 }
 
 bool RabbitMQ::publish(const std::string& exchange, const std::string& routing_key,
                        const std::string& message) {
-    try {
-        channel_->publish(exchange, routing_key, message);
-        return true;
-    } catch (const std::exception& e) {
+    if (!connected_) {
+        std::cerr << "[RabbitMQ] Not connected" << std::endl;
         return false;
     }
+
+    amqp_bytes_t exchange_bytes = amqp_cstring_bytes(exchange.c_str());
+    amqp_bytes_t routing_key_bytes = amqp_cstring_bytes(routing_key.c_str());
+    amqp_bytes_t message_bytes;
+    message_bytes.len = message.size();
+    message_bytes.bytes = (void*)message.data();
+
+    amqp_basic_properties_t props;
+    props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG;
+    props.content_type = amqp_cstring_bytes("application/json");
+    props.delivery_mode = 2; // persistent
+
+    int status = amqp_basic_publish(conn_, 1, exchange_bytes, routing_key_bytes,
+                                     0, 0, &props, message_bytes);
+    
+    if (status != AMQP_STATUS_OK) {
+        std::cerr << "[RabbitMQ] Publish failed: " << amqp_error_string2(status) << std::endl;
+        return false;
+    }
+
+    std::cout << "[RabbitMQ] Published to queue '" << routing_key << "': " << message.substr(0, 100) << std::endl;
+    return true;
 }

@@ -1,10 +1,12 @@
 #pragma once
 
-#include <string>
+#include <amqp.h>
+#include <amqp_tcp_socket.h>
+#include <atomic>
 #include <functional>
 #include <memory>
+#include <string>
 #include <thread>
-#include <atomic>
 #include <vector>
 
 struct RabbitMQConfig {
@@ -19,23 +21,32 @@ struct RabbitMQConfig {
 RabbitMQConfig load_rabbitmq_config();
 
 class RabbitMQConsumer {
-public:
+  public:
     // Callback receives queue name and message body
-    using MessageCallback = std::function<void(const std::string& queue, const std::string& message)>;
+    using MessageCallback =
+        std::function<void(const std::string& queue, const std::string& message)>;
 
     RabbitMQConsumer(const RabbitMQConfig& config);
     ~RabbitMQConsumer();
 
-    void connect();
+    bool connect();
     void subscribe(MessageCallback callback);
     void start();
     void stop();
+    bool isConnected() const {
+        return connected_;
+    }
 
-private:
+  private:
+    bool checkRpcReply(const char* context);
+    void consumeLoop();
+
     RabbitMQConfig config_;
+    MessageCallback callback_;
     std::atomic<bool> running_{false};
+    std::atomic<bool> connected_{false};
     std::thread consumer_thread_;
-    
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+
+    amqp_connection_state_t conn_ = nullptr;
+    amqp_socket_t* socket_ = nullptr;
 };

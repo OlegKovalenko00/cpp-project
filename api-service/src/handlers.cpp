@@ -1,11 +1,40 @@
 #include "handlers.hpp"
 
 #include <iostream>
+#include <cstdlib>
 #include "rabbitmq.hpp"
 
 using json = nlohmann::json;
 
-RabbitMQ rabbitmq(getenv("RABBITMQ_HOST"), std::stoi(getenv("RABBITMQ_PORT")), getenv("RABBITMQ_USERNAME"), getenv("RABBITMQ_PASSWORD"), "/");
+// Безопасное чтение переменных окружения
+static std::string getEnvStr(const char* name, const std::string& defaultValue) {
+    const char* val = std::getenv(name);
+    return val ? val : defaultValue;
+}
+
+static int getEnvInt(const char* name, int defaultValue) {
+    const char* val = std::getenv(name);
+    return val ? std::stoi(val) : defaultValue;
+}
+
+// Глобальный RabbitMQ клиент (ленивая инициализация)
+static RabbitMQ* g_rabbitmq = nullptr;
+
+static RabbitMQ& getRabbitMQ() {
+    if (!g_rabbitmq) {
+        g_rabbitmq = new RabbitMQ(
+            getEnvStr("RABBITMQ_HOST", "localhost"),
+            getEnvInt("RABBITMQ_PORT", 5672),
+            getEnvStr("RABBITMQ_USERNAME", "guest"),
+            getEnvStr("RABBITMQ_PASSWORD", "guest"),
+            getEnvStr("RABBITMQ_VHOST", "/")
+        );
+        if (!g_rabbitmq->connect()) {
+            std::cerr << "[RabbitMQ] Failed to connect, messages will be lost" << std::endl;
+        }
+    }
+    return *g_rabbitmq;
+}
 
 // ==================== Helper Functions ====================
 
@@ -45,7 +74,13 @@ void handlePageView(const httplib::Request& req, httplib::Response& res) {
 
         std::cout << "[PageView] page=" << event.page << std::endl;
 
-        rabbitmq.publish("page_views", "", json(event).dump());
+        if (!getRabbitMQ().publish("", "page_views", json(event).dump())) {
+            sendError(res, 500, ErrorCode::InternalError,
+                      "Failed to publish page view event");
+            return;
+        } else {
+            std::cout << "[PageView] Published event for page=" << event.page << std::endl;
+        }
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidPageView,
@@ -75,7 +110,13 @@ void handleClick(const httplib::Request& req, httplib::Response& res) {
         std::cout << "[Click] page=" << event.page
                   << " element_id=" << event.element_id << std::endl;
 
-        rabbitmq.publish("clicks", "", json(event).dump());
+        if (!getRabbitMQ().publish("", "clicks", json(event).dump())) {
+            sendError(res, 500, ErrorCode::InternalError,
+                      "Failed to publish click event");
+            return;
+        } else {
+            std::cout << "[Click] Published event for page=" << event.page << " element_id=" << event.element_id << std::endl;
+        }
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidClickEvent,
@@ -125,7 +166,13 @@ void handlePerformance(const httplib::Request& req, httplib::Response& res) {
 
         std::cout << "[Performance] page=" << event.page << std::endl;
 
-        rabbitmq.publish("performance_events", "", json(event).dump());
+        if (!getRabbitMQ().publish("", "performance_events", json(event).dump())) {
+            sendError(res, 500, ErrorCode::InternalError,
+                      "Failed to publish performance event");
+            return;
+        } else {
+            std::cout << "[Performance] Published event for page=" << event.page << std::endl;
+        }
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidPerformanceEvent,
@@ -161,7 +208,13 @@ void handleErrorEvent(const httplib::Request& req, httplib::Response& res) {
         std::cout << "[ErrorEvent] page=" << event.page
                   << " error_type=" << event.error_type << std::endl;
 
-        rabbitmq.publish("error_events", "", json(event).dump());
+        if (!getRabbitMQ().publish("", "error_events", json(event).dump())) {
+            sendError(res, 500, ErrorCode::InternalError,
+                      "Failed to publish error event");
+            return;
+        } else {
+            std::cout << " DSJKLFJDSLKJFL:DSKJFLKSDJFLKDJSFLKDSJFKLDF [ErrorEvent] Published event for page=" << event.page << " error_type=" << event.error_type << std::endl;
+        }
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidErrorEvent,
@@ -184,7 +237,13 @@ void handleCustomEvent(const httplib::Request& req, httplib::Response& res) {
 
         std::cout << "[CustomEvent] name=" << event.name << std::endl;
 
-        rabbitmq.publish("custom_events", "", json(event).dump());
+        if (!getRabbitMQ().publish("", "custom_events", json(event).dump())) {
+            sendError(res, 500, ErrorCode::InternalError,
+                      "Failed to publish custom event");
+            return;
+        } else {
+            std::cout << "[CustomEvent] Published event name=" << event.name << std::endl;
+        }
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidCustomEvent,
@@ -194,7 +253,7 @@ void handleCustomEvent(const httplib::Request& req, httplib::Response& res) {
 
 // ==================== Route Registration ====================
 
-void registerRoutes(httplib::Server& server, RabbitMQ& rabbitmq) {
+void registerRoutes(httplib::Server& server) {
     server.Get("/health/ping", handleHealthPing);
     server.Post("/page-views", handlePageView);
     server.Post("/clicks", handleClick);

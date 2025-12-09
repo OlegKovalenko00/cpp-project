@@ -1,152 +1,186 @@
 #include "rabbitmq.h"
-#include <amqpcpp.h>
-#include <amqpcpp/linux_tcp.h>
-#include <event2/event.h>
-#include <iostream>
+
+#include <chrono>
 #include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <thread>
 
 RabbitMQConfig load_rabbitmq_config() {
     RabbitMQConfig config;
-    
+
     const char* host = std::getenv("RABBITMQ_HOST");
     const char* port = std::getenv("RABBITMQ_PORT");
     const char* user = std::getenv("RABBITMQ_USER");
     const char* password = std::getenv("RABBITMQ_PASSWORD");
     const char* vhost = std::getenv("RABBITMQ_VHOST");
-    
+
     config.host = host ? host : "localhost";
     config.port = port ? std::stoi(port) : 5672;
     config.user = user ? user : "guest";
     config.password = password ? password : "guest";
     config.vhost = vhost ? vhost : "/";
-    
+
     // Default queues matching api-service
     config.queues = {"page_views", "clicks", "performance_events", "error_events", "custom_events"};
-    
+
     return config;
 }
 
-class LibEventHandler : public AMQP::TcpHandler {
-public:
-    LibEventHandler(struct event_base* evbase) : evbase_(evbase) {}
-
-    void onAttached(AMQP::TcpConnection* connection) override {}
-    
-    void onConnected(AMQP::TcpConnection* connection) override {
-        std::cout << "RabbitMQ connected" << std::endl;
-    }
-    
-    void onReady(AMQP::TcpConnection* connection) override {
-        std::cout << "RabbitMQ ready" << std::endl;
-    }
-    
-    void onError(AMQP::TcpConnection* connection, const char* message) override {
-        std::cerr << "RabbitMQ error: " << message << std::endl;
-    }
-    
-    void onClosed(AMQP::TcpConnection* connection) override {
-        std::cout << "RabbitMQ connection closed" << std::endl;
-    }
-
-    void monitor(AMQP::TcpConnection* connection, int fd, int flags) override {
-        if (fd_event_) {
-            event_del(fd_event_);
-            event_free(fd_event_);
-            fd_event_ = nullptr;
-        }
-
-        if (flags == 0) return;
-
-        short what = 0;
-        if (flags & AMQP::readable) what |= EV_READ;
-        if (flags & AMQP::writable) what |= EV_WRITE;
-
-        fd_event_ = event_new(evbase_, fd, what | EV_PERSIST,
-            [](evutil_socket_t fd, short what, void* arg) {
-                auto* conn = static_cast<AMQP::TcpConnection*>(arg);
-                if (what & EV_READ) conn->process(fd, AMQP::readable);
-                if (what & EV_WRITE) conn->process(fd, AMQP::writable);
-            }, connection);
-        
-        event_add(fd_event_, nullptr);
-    }
-
-private:
-    struct event_base* evbase_;
-    struct event* fd_event_ = nullptr;
-};
-
-class RabbitMQConsumer::Impl {
-public:
-    struct event_base* evbase_ = nullptr;
-    std::unique_ptr<LibEventHandler> handler_;
-    std::unique_ptr<AMQP::TcpConnection> connection_;
-    std::unique_ptr<AMQP::TcpChannel> channel_;
-};
-
-RabbitMQConsumer::RabbitMQConsumer(const RabbitMQConfig& config)
-    : config_(config), impl_(std::make_unique<Impl>()) {}
+RabbitMQConsumer::RabbitMQConsumer(const RabbitMQConfig& config) : config_(config) {
+}
 
 RabbitMQConsumer::~RabbitMQConsumer() {
     stop();
+    if (conn_) {
+        if (connected_) {
+            amqp_channel_close(conn_, 1, AMQP_REPLY_SUCCESS);
+            amqp_connection_close(conn_, AMQP_REPLY_SUCCESS);
+        }
+        amqp_destroy_connection(conn_);
+    }
 }
 
-void RabbitMQConsumer::connect() {
-    impl_->evbase_ = event_base_new();
-    impl_->handler_ = std::make_unique<LibEventHandler>(impl_->evbase_);
-    
-    std::string address = "amqp://" + config_.user + ":" + config_.password + "@" + 
-                          config_.host + ":" + std::to_string(config_.port) + config_.vhost;
-    
-    AMQP::Address amqp_address(address);
-    
-    impl_->connection_ = std::make_unique<AMQP::TcpConnection>(
-        impl_->handler_.get(), amqp_address);
-    impl_->channel_ = std::make_unique<AMQP::TcpChannel>(impl_->connection_.get());
+bool RabbitMQConsumer::checkRpcReply(const char* context) {
+    amqp_rpc_reply_t reply = amqp_get_rpc_reply(conn_);
+    if (reply.reply_type != AMQP_RESPONSE_NORMAL) {
+        std::cerr << "[RabbitMQ] " << context << " failed" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool RabbitMQConsumer::connect() {
+    std::cout << "RabbitMQ connecting to: " << config_.host << ":" << config_.port << std::endl;
+
+    conn_ = amqp_new_connection();
+    if (!conn_) {
+        std::cerr << "[RabbitMQ] Failed to create connection" << std::endl;
+        return false;
+    }
+
+    socket_ = amqp_tcp_socket_new(conn_);
+    if (!socket_) {
+        std::cerr << "[RabbitMQ] Failed to create TCP socket" << std::endl;
+        return false;
+    }
+
+    int status = amqp_socket_open(socket_, config_.host.c_str(), config_.port);
+    if (status != AMQP_STATUS_OK) {
+        std::cerr << "[RabbitMQ] Failed to open socket: " << amqp_error_string2(status)
+                  << std::endl;
+        return false;
+    }
+
+    amqp_rpc_reply_t reply =
+        amqp_login(conn_, config_.vhost.c_str(), 0, 131072, 0, AMQP_SASL_METHOD_PLAIN,
+                   config_.user.c_str(), config_.password.c_str());
+    if (reply.reply_type != AMQP_RESPONSE_NORMAL) {
+        std::cerr << "[RabbitMQ] Login failed" << std::endl;
+        return false;
+    }
+
+    amqp_channel_open(conn_, 1);
+    if (!checkRpcReply("Opening channel")) {
+        return false;
+    }
+
+    // Объявляем очереди
+    for (const auto& queue : config_.queues) {
+        amqp_queue_declare(conn_, 1, amqp_cstring_bytes(queue.c_str()),
+                           0, // passive
+                           1, // durable
+                           0, // exclusive
+                           0, // auto_delete
+                           amqp_empty_table);
+        if (!checkRpcReply("Declaring queue")) {
+            std::cerr << "[RabbitMQ] Failed to declare queue: " << queue << std::endl;
+        } else {
+            std::cout << "[RabbitMQ] Queue declared: " << queue << std::endl;
+        }
+    }
+
+    connected_ = true;
+    std::cout << "[RabbitMQ] Connected to " << config_.host << ":" << config_.port << std::endl;
+    return true;
 }
 
 void RabbitMQConsumer::subscribe(MessageCallback callback) {
-    for (const auto& queue_name : config_.queues) {
-        impl_->channel_->declareQueue(queue_name, AMQP::durable)
-            .onSuccess([this, callback, queue_name](const std::string& name, uint32_t messagecount, uint32_t consumercount) {
-                std::cout << "Queue '" << name << "' declared, messages: " << messagecount << std::endl;
-                
-                impl_->channel_->consume(queue_name)
-                    .onReceived([this, callback, queue_name](const AMQP::Message& message, uint64_t deliveryTag, bool redelivered) {
-                        std::string body(message.body(), message.bodySize());
-                        
-                        try {
-                            callback(queue_name, body);
-                            impl_->channel_->ack(deliveryTag);
-                        } catch (const std::exception& e) {
-                            std::cerr << "Message processing error on queue " << queue_name << ": " << e.what() << std::endl;
-                            impl_->channel_->reject(deliveryTag, true);
-                        }
-                    })
-                    .onError([queue_name](const char* message) {
-                        std::cerr << "Consume error on queue " << queue_name << ": " << message << std::endl;
-                    });
-            })
-            .onError([queue_name](const char* message) {
-                std::cerr << "Queue declare error for " << queue_name << ": " << message << std::endl;
-            });
+    callback_ = callback;
+
+    // Подписываемся на все очереди
+    for (const auto& queue : config_.queues) {
+        amqp_basic_consume(conn_, 1, amqp_cstring_bytes(queue.c_str()),
+                           amqp_empty_bytes, // consumer_tag
+                           0,                // no_local
+                           0,                // no_ack (we will ack manually)
+                           0,                // exclusive
+                           amqp_empty_table);
+        if (!checkRpcReply("Starting consumer")) {
+            std::cerr << "[RabbitMQ] Failed to start consuming from: " << queue << std::endl;
+        } else {
+            std::cout << "[RabbitMQ] Subscribed to queue: " << queue << std::endl;
+        }
     }
+}
+
+void RabbitMQConsumer::consumeLoop() {
+    std::cout << "[RabbitMQ] Consumer loop started" << std::endl;
+
+    while (running_) {
+        amqp_envelope_t envelope;
+        amqp_maybe_release_buffers(conn_);
+
+        struct timeval timeout = {0, 100000}; // 100ms timeout
+        amqp_rpc_reply_t reply = amqp_consume_message(conn_, &envelope, &timeout, 0);
+
+        if (reply.reply_type == AMQP_RESPONSE_NORMAL) {
+            std::string routing_key(static_cast<char*>(envelope.routing_key.bytes),
+                                    envelope.routing_key.len);
+            std::string body(static_cast<char*>(envelope.message.body.bytes),
+                             envelope.message.body.len);
+
+            std::cout << "[RabbitMQ] Received message from queue '" << routing_key << "'"
+                      << std::endl;
+            std::cout << "[RabbitMQ] Message body: " << body << std::endl;
+
+            try {
+                if (callback_) {
+                    callback_(routing_key, body);
+                }
+                amqp_basic_ack(conn_, 1, envelope.delivery_tag, 0);
+                std::cout << "[RabbitMQ] Message acknowledged" << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[RabbitMQ] Error processing message: " << e.what() << std::endl;
+                amqp_basic_reject(conn_, 1, envelope.delivery_tag, 1); // requeue
+            }
+
+            amqp_destroy_envelope(&envelope);
+        } else if (reply.reply_type == AMQP_RESPONSE_LIBRARY_EXCEPTION &&
+                   reply.library_error == AMQP_STATUS_TIMEOUT) {
+            // Timeout - это нормально, просто продолжаем
+            continue;
+        } else if (reply.reply_type != AMQP_RESPONSE_NORMAL) {
+            std::cerr << "[RabbitMQ] Consumer error, reconnecting..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
+    }
+
+    std::cout << "[RabbitMQ] Consumer loop stopped" << std::endl;
 }
 
 void RabbitMQConsumer::start() {
     running_ = true;
     consumer_thread_ = std::thread([this]() {
-        std::cout << "RabbitMQ consumer started on queues: ";
+        std::cout << "[RabbitMQ] Consumer started on queues: ";
         for (size_t i = 0; i < config_.queues.size(); ++i) {
             std::cout << config_.queues[i];
-            if (i < config_.queues.size() - 1) std::cout << ", ";
+            if (i < config_.queues.size() - 1)
+                std::cout << ", ";
         }
         std::cout << std::endl;
-        
-        while (running_) {
-            event_base_loop(impl_->evbase_, EVLOOP_NONBLOCK);
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
+
+        consumeLoop();
     });
 }
 
@@ -154,11 +188,5 @@ void RabbitMQConsumer::stop() {
     running_ = false;
     if (consumer_thread_.joinable()) {
         consumer_thread_.join();
-    }
-    if (impl_->channel_) impl_->channel_.reset();
-    if (impl_->connection_) impl_->connection_.reset();
-    if (impl_->evbase_) {
-        event_base_free(impl_->evbase_);
-        impl_->evbase_ = nullptr;
     }
 }

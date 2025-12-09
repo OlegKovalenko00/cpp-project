@@ -5,6 +5,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     cmake \
     git \
+    librabbitmq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Копируем файлы api-service
@@ -19,6 +20,10 @@ RUN mkdir -p build && cd build && \
 FROM gcc:13-bookworm
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    librabbitmq4 \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/build/api-service .
 

@@ -9,10 +9,14 @@ services:
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8080
+      - RABBITMQ_HOST=metrics-rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=guest
+      - RABBITMQ_PASSWORD=guest
     restart: unless-stopped
     networks:
-      - api-service-network
+      - metrics-service_metrics-network
 
 networks:
-  api-service-network:
-    driver: bridge
+  metrics-service_metrics-network:
+    external: true

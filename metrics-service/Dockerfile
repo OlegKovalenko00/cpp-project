@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     libprotobuf-dev \
     protobuf-compiler \
     protobuf-compiler-grpc \
-    libevent-dev \
+    librabbitmq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY proto/metrics.proto /app/proto/
@@ -21,11 +21,11 @@ COPY metrics-service/include/ include/
 COPY metrics-service/src/ src/
 
 RUN protoc --proto_path=/app/proto \
-           --experimental_allow_proto3_optional \
-           --cpp_out=/app/include \
-           --grpc_out=/app/include \
-           --plugin=protoc-gen-grpc=$(which grpc_cpp_plugin) \
-           /app/proto/metrics.proto && \
+    --experimental_allow_proto3_optional \
+    --cpp_out=/app/include \
+    --grpc_out=/app/include \
+    --plugin=protoc-gen-grpc=$(which grpc_cpp_plugin) \
+    /app/proto/metrics.proto && \
     mv /app/include/*.cc /app/src/
 
 RUN mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
@@ -38,7 +38,7 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     libgrpc++1.51 \
     libprotobuf32 \
-    libevent-2.1-7 \
+    librabbitmq4 \
     libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 

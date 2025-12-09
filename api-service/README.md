@@ -1,6 +1,6 @@
 # API сервис (API Service)
 
-API сервис для приёма метрик с фронтенда через REST API.
+API сервис для приёма метрик с фронтенда через REST API и отправки в RabbitMQ для обработки metrics-service.
 
 Полная спецификация API описана в файле [`openapi.yaml`](openapi.yaml).
 
@@ -20,30 +20,51 @@ API сервис для приёма метрик с фронтенда чере
 - **C++23**
 - **cpp-httplib** — HTTP сервер
 - **nlohmann/json** — работа с JSON
+- **rabbitmq-c** — отправка событий в RabbitMQ
 
 ## Сборка и запуск
 
-### Требования
+### Docker (рекомендуется)
 
-- CMake 3.10+
-- Компилятор с поддержкой C++23 (GCC 13+, Clang 16+, MSVC 2022+)
+```bash
+cd api-service
+docker compose up --build -d
+```
 
-### Сборка
+### Локальная сборка
+
+#### Требования
+
+- CMake 3.14+
+- Компилятор с поддержкой C++23 (GCC 13+, Clang 16+)
+- librabbitmq-dev
+
+#### Сборка
 
 ```bash
 cd api-service
 mkdir -p build && cd build
 cmake ..
-make
+make -j$(nproc)
 ```
 
-### Запуск сервера
+#### Запуск сервера
 
 ```bash
 ./api-service
 ```
 
 Сервер запустится на `http://localhost:8080`.
+
+## Переменные окружения
+
+| Переменная          | По умолчанию | Описание      |
+| ------------------- | ------------ | ------------- |
+| `RABBITMQ_HOST`     | `localhost`  | Хост RabbitMQ |
+| `RABBITMQ_PORT`     | `5672`       | Порт RabbitMQ |
+| `RABBITMQ_USERNAME` | `guest`      | Пользователь  |
+| `RABBITMQ_PASSWORD` | `guest`      | Пароль        |
+| `RABBITMQ_VHOST`    | `/`          | Virtual host  |
 
 ## Тестирование
 
@@ -67,6 +88,11 @@ curl http://localhost:8080/health/ping
 curl -X POST http://localhost:8080/page-views \
   -H "Content-Type: application/json" \
   -d '{"page": "/home", "timestamp": 1733505600}'
+
+# Отправка клика
+curl -X POST http://localhost:8080/clicks \
+  -H "Content-Type: application/json" \
+  -d '{"page": "/home", "element_id": "btn-signup", "timestamp": 1733505600}'
 ```
 
 ## Структура проекта
@@ -74,15 +100,28 @@ curl -X POST http://localhost:8080/page-views \
 ```
 api-service/
 ├── CMakeLists.txt
+├── Dockerfile
+├── docker-compose.yml
 ├── openapi.yaml          # OpenAPI спецификация
 ├── README.md
 ├── include/
 │   ├── handlers.hpp      # Объявления handlers
-│   └── models.hpp        # Модели данных
+│   ├── models.hpp        # Модели данных
+│   └── rabbitmq.hpp      # RabbitMQ клиент
 ├── src/
 │   ├── main.cpp          # Точка входа
 │   ├── handlers.cpp      # Реализация handlers
-│   └── models.cpp        # Сериализация моделей
+│   ├── models.cpp        # Сериализация моделей
+│   └── rabbitmq.cpp      # Реализация RabbitMQ клиента
 └── tests/
     └── test_handlers.py  # Python тесты
 ```
+
+## Очереди RabbitMQ
+
+Сервис публикует события в следующие очереди:
+- `page_views` — просмотры страниц
+- `clicks` — клики
+- `performance_events` — метрики производительности
+- `error_events` — ошибки
+- `custom_events` — кастомные события

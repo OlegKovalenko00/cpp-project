@@ -10,6 +10,7 @@ find_package(Threads REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GRPC REQUIRED grpc++ grpc)
+pkg_check_modules(RABBITMQ REQUIRED librabbitmq)
 
 set(FETCHCONTENT_QUIET OFF)
 FetchContent_Declare(
@@ -17,33 +18,27 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/jtv/libpqxx.git
     GIT_TAG 7.9.2
     GIT_SHALLOW TRUE
-)
-FetchContent_Declare(
-    amqpcpp
-    GIT_REPOSITORY https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git
-    GIT_TAG v4.3.26
-    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
 )
 FetchContent_Declare(
     cpp_httplib
     GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
     GIT_TAG v0.15.3
     GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
 )
 FetchContent_Declare(
     json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
-    GIT_SHALLOW TRUE
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 set(PQXX_BUILD_TEST OFF CACHE BOOL "" FORCE)
 set(PQXX_BUILD_DOC OFF CACHE BOOL "" FORCE)
-set(AMQP-CPP_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-set(AMQP-CPP_LINUX_TCP ON CACHE BOOL "" FORCE)
+set(BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(SKIP_BUILD_TEST ON CACHE BOOL "" FORCE)
 set(JSON_BuildTests OFF CACHE INTERNAL "")
-FetchContent_MakeAvailable(libpqxx amqpcpp cpp_httplib json)
-
-pkg_check_modules(LIBEVENT REQUIRED libevent)
+set(JSON_Install OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(libpqxx cpp_httplib json)
 
 set(SOURCES
     src/main.cpp
@@ -64,10 +59,9 @@ target_include_directories(metrics_service
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${Protobuf_INCLUDE_DIRS}
         ${GRPC_INCLUDE_DIRS}
-        ${amqpcpp_SOURCE_DIR}/include
         ${cpp_httplib_SOURCE_DIR}
-        ${LIBEVENT_INCLUDE_DIRS}
         ${json_SOURCE_DIR}/include
+        ${RABBITMQ_INCLUDE_DIRS}
 )
 
 target_link_libraries(metrics_service
@@ -76,9 +70,8 @@ target_link_libraries(metrics_service
         ${Protobuf_LIBRARIES}
         pqxx
         pq
-        amqpcpp
-        ${LIBEVENT_LIBRARIES}
+        ${RABBITMQ_LIBRARIES}
         Threads::Threads
 )
 
-target_link_directories(metrics_service PRIVATE ${GRPC_LIBRARY_DIRS} ${LIBEVENT_LIBRARY_DIRS})
+target_link_directories(metrics_service PRIVATE ${GRPC_LIBRARY_DIRS} ${RABBITMQ_LIBRARY_DIRS})

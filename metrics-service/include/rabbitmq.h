@@ -5,6 +5,7 @@
 #include <memory>
 #include <thread>
 #include <atomic>
+#include <vector>
 
 struct RabbitMQConfig {
     std::string host;
@@ -12,14 +13,15 @@ struct RabbitMQConfig {
     std::string user;
     std::string password;
     std::string vhost;
-    std::string queue;
+    std::vector<std::string> queues;
 };
 
 RabbitMQConfig load_rabbitmq_config();
 
 class RabbitMQConsumer {
 public:
-    using MessageCallback = std::function<void(const std::string& message)>;
+    // Callback receives queue name and message body
+    using MessageCallback = std::function<void(const std::string& queue, const std::string& message)>;
 
     RabbitMQConsumer(const RabbitMQConfig& config);
     ~RabbitMQConsumer();

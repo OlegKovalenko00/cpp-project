@@ -11,6 +11,11 @@ chmod +x run.sh
 ./run.sh   
 ```
 
+## Запуск клиента
+```bash
+pip3 install faker pyyaml requests
+```
+
 ## Архитектура
 
 ```

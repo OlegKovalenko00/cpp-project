@@ -13,14 +13,15 @@ RabbitMQConfig load_rabbitmq_config() {
     const char* user = std::getenv("RABBITMQ_USER");
     const char* password = std::getenv("RABBITMQ_PASSWORD");
     const char* vhost = std::getenv("RABBITMQ_VHOST");
-    const char* queue = std::getenv("RABBITMQ_QUEUE");
     
     config.host = host ? host : "localhost";
     config.port = port ? std::stoi(port) : 5672;
     config.user = user ? user : "guest";
     config.password = password ? password : "guest";
     config.vhost = vhost ? vhost : "/";
-    config.queue = queue ? queue : "metrics_events";
+    
+    // Default queues matching api-service
+    config.queues = {"page_views", "clicks", "performance_events", "error_events", "custom_events"};
     
     return config;
 }
@@ -105,35 +106,43 @@ void RabbitMQConsumer::connect() {
 }
 
 void RabbitMQConsumer::subscribe(MessageCallback callback) {
-    impl_->channel_->declareQueue(config_.queue, AMQP::durable)
-        .onSuccess([this, callback](const std::string& name, uint32_t messagecount, uint32_t consumercount) {
-            std::cout << "Queue '" << name << "' declared, messages: " << messagecount << std::endl;
-            
-            impl_->channel_->consume(config_.queue)
-                .onReceived([this, callback](const AMQP::Message& message, uint64_t deliveryTag, bool redelivered) {
-                    std::string body(message.body(), message.bodySize());
-                    
-                    try {
-                        callback(body);
-                        impl_->channel_->ack(deliveryTag);
-                    } catch (const std::exception& e) {
-                        std::cerr << "Message processing error: " << e.what() << std::endl;
-                        impl_->channel_->reject(deliveryTag, true);
-                    }
-                })
-                .onError([](const char* message) {
-                    std::cerr << "Consume error: " << message << std::endl;
-                });
-        })
-        .onError([](const char* message) {
-            std::cerr << "Queue declare error: " << message << std::endl;
-        });
+    for (const auto& queue_name : config_.queues) {
+        impl_->channel_->declareQueue(queue_name, AMQP::durable)
+            .onSuccess([this, callback, queue_name](const std::string& name, uint32_t messagecount, uint32_t consumercount) {
+                std::cout << "Queue '" << name << "' declared, messages: " << messagecount << std::endl;
+                
+                impl_->channel_->consume(queue_name)
+                    .onReceived([this, callback, queue_name](const AMQP::Message& message, uint64_t deliveryTag, bool redelivered) {
+                        std::string body(message.body(), message.bodySize());
+                        
+                        try {
+                            callback(queue_name, body);
+                            impl_->channel_->ack(deliveryTag);
+                        } catch (const std::exception& e) {
+                            std::cerr << "Message processing error on queue " << queue_name << ": " << e.what() << std::endl;
+                            impl_->channel_->reject(deliveryTag, true);
+                        }
+                    })
+                    .onError([queue_name](const char* message) {
+                        std::cerr << "Consume error on queue " << queue_name << ": " << message << std::endl;
+                    });
+            })
+            .onError([queue_name](const char* message) {
+                std::cerr << "Queue declare error for " << queue_name << ": " << message << std::endl;
+            });
+    }
 }
 
 void RabbitMQConsumer::start() {
     running_ = true;
     consumer_thread_ = std::thread([this]() {
-        std::cout << "RabbitMQ consumer started on queue: " << config_.queue << std::endl;
+        std::cout << "RabbitMQ consumer started on queues: ";
+        for (size_t i = 0; i < config_.queues.size(); ++i) {
+            std::cout << config_.queues[i];
+            if (i < config_.queues.size() - 1) std::cout << ", ";
+        }
+        std::cout << std::endl;
+        
         while (running_) {
             event_base_loop(impl_->evbase_, EVLOOP_NONBLOCK);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));

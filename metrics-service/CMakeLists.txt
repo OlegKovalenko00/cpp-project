@@ -30,11 +30,18 @@ FetchContent_Declare(
     GIT_TAG v0.15.3
     GIT_SHALLOW TRUE
 )
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+    GIT_SHALLOW TRUE
+)
 set(PQXX_BUILD_TEST OFF CACHE BOOL "" FORCE)
 set(PQXX_BUILD_DOC OFF CACHE BOOL "" FORCE)
 set(AMQP-CPP_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(AMQP-CPP_LINUX_TCP ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(libpqxx amqpcpp cpp_httplib)
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(libpqxx amqpcpp cpp_httplib json)
 
 pkg_check_modules(LIBEVENT REQUIRED libevent)
 
@@ -60,6 +67,7 @@ target_include_directories(metrics_service
         ${amqpcpp_SOURCE_DIR}/include
         ${cpp_httplib_SOURCE_DIR}
         ${LIBEVENT_INCLUDE_DIRS}
+        ${json_SOURCE_DIR}/include
 )
 
 target_link_libraries(metrics_service

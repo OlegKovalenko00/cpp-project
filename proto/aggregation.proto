@@ -1,0 +1,172 @@
+syntax = "proto3";
+
+package metricsys.aggregation;
+
+import "google/protobuf/timestamp.proto";
+
+// ===== Common =====
+
+message TimeRange {
+  google.protobuf.Timestamp from = 1;
+  google.protobuf.Timestamp to = 2;
+}
+
+message Pagination {
+  uint32 limit = 1;   // max rows to return
+  uint32 offset = 2;  // for simple paging
+}
+
+message GetWatermarkRequest {}
+
+message GetWatermarkResponse {
+  google.protobuf.Timestamp last_aggregated_at = 1;
+}
+
+// ===== Page Views: agg_page_views =====
+
+message AggPageViewsRow {
+  google.protobuf.Timestamp time_bucket = 1;
+  string project_id = 2;
+  string page = 3;
+  int64 views_count = 4;
+  int64 unique_users = 5;
+  int64 unique_sessions = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message GetPageViewsAggRequest {
+  string project_id = 1;
+  TimeRange time_range = 2;
+  optional string page = 3;      // filter конкретной страницы
+  Pagination pagination = 4;     // optional (можно не заполнять)
+}
+
+message GetPageViewsAggResponse {
+  repeated AggPageViewsRow rows = 1;
+}
+
+// ===== Clicks: agg_clicks =====
+
+message AggClicksRow {
+  google.protobuf.Timestamp time_bucket = 1;
+  string project_id = 2;
+  string page = 3;
+  optional string element_id = 4;
+  int64 clicks_count = 5;
+  int64 unique_users = 6;
+  int64 unique_sessions = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message GetClicksAggRequest {
+  string project_id = 1;
+  TimeRange time_range = 2;
+  optional string page = 3;
+  optional string element_id = 4;
+  Pagination pagination = 5;
+}
+
+message GetClicksAggResponse {
+  repeated AggClicksRow rows = 1;
+}
+
+// ===== Performance: agg_performance =====
+
+message AggPerformanceRow {
+  google.protobuf.Timestamp time_bucket = 1;
+  string project_id = 2;
+  string page = 3;
+
+  int64 samples_count = 4;
+
+  double avg_total_load_ms = 5;
+  double p95_total_load_ms = 6;
+
+  double avg_ttfb_ms = 7;
+  double p95_ttfb_ms = 8;
+
+  double avg_fcp_ms = 9;
+  double p95_fcp_ms = 10;
+
+  double avg_lcp_ms = 11;
+  double p95_lcp_ms = 12;
+
+  google.protobuf.Timestamp created_at = 13;
+}
+
+message GetPerformanceAggRequest {
+  string project_id = 1;
+  TimeRange time_range = 2;
+  optional string page = 3;
+  Pagination pagination = 4;
+}
+
+message GetPerformanceAggResponse {
+  repeated AggPerformanceRow rows = 1;
+}
+
+// ===== Errors: agg_errors =====
+
+message AggErrorsRow {
+  google.protobuf.Timestamp time_bucket = 1;
+  string project_id = 2;
+  string page = 3;
+  optional string error_type = 4;
+
+  int64 errors_count = 5;
+  int64 warning_count = 6;
+  int64 critical_count = 7;
+
+  int64 unique_users = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message GetErrorsAggRequest {
+  string project_id = 1;
+  TimeRange time_range = 2;
+  optional string page = 3;
+  optional string error_type = 4;
+  Pagination pagination = 5;
+}
+
+message GetErrorsAggResponse {
+  repeated AggErrorsRow rows = 1;
+}
+
+// ===== Custom Events: agg_custom_events =====
+
+message AggCustomEventsRow {
+  google.protobuf.Timestamp time_bucket = 1;
+  string project_id = 2;
+  string event_name = 3;
+  optional string page = 4;
+
+  int64 events_count = 5;
+  int64 unique_users = 6;
+  int64 unique_sessions = 7;
+
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message GetCustomEventsAggRequest {
+  string project_id = 1;
+  TimeRange time_range = 2;
+  string event_name = 3;
+  optional string page = 4;
+  Pagination pagination = 5;
+}
+
+message GetCustomEventsAggResponse {
+  repeated AggCustomEventsRow rows = 1;
+}
+
+// ===== Service =====
+
+service AggregationService {
+  rpc GetWatermark(GetWatermarkRequest) returns (GetWatermarkResponse);
+  rpc GetPageViewsAgg(GetPageViewsAggRequest) returns (GetPageViewsAggResponse);
+  rpc GetClicksAgg(GetClicksAggRequest) returns (GetClicksAggResponse);
+  rpc GetPerformanceAgg(GetPerformanceAggRequest) returns (GetPerformanceAggResponse);
+  rpc GetErrorsAgg(GetErrorsAggRequest) returns (GetErrorsAggResponse);
+  rpc GetCustomEventsAgg(GetCustomEventsAggRequest) returns (GetCustomEventsAggResponse);
+}

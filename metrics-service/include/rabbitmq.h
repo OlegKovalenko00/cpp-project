@@ -1,8 +1,11 @@
 #pragma once
 
-#include <string>
+#include <amqp.h>
+#include <amqp_tcp_socket.h>
+#include <atomic>
 #include <functional>
 #include <memory>
+#include <string>
 #include <thread>
 #include <atomic>
 
@@ -65,6 +68,9 @@ public:
     void subscribe(); // Кладёт сообщения в очередь
     void start();
     void stop();
+    bool isConnected() const {
+        return connected_;
+    }
 
     MessageQueue& get_message_queue() { return message_queue_; }
 

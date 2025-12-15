@@ -4,9 +4,6 @@ project(api-service)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Совместимость с устаревшими CMake в зависимостях
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "")
-
 include_directories(include)
 include(FetchContent)
 
@@ -19,24 +16,30 @@ FetchContent_Declare(
 
 FetchContent_Declare(
     json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG        v3.11.3
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    GIT_SHALLOW    TRUE
 )
 
-# AMQP-CPP опции до FetchContent_MakeAvailable
-set(AMQP-CPP_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-set(AMQP-CPP_LINUX_TCP ON CACHE BOOL "" FORCE)
+# rabbitmq-c - синхронный C клиент для RabbitMQ
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ENABLE_SSL_SUPPORT OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
-    amqpcpp
-    GIT_REPOSITORY https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git
-    GIT_TAG v4.3.26
-    GIT_SHALLOW TRUE
+    rabbitmq-c
+    GIT_REPOSITORY https://github.com/alanxz/rabbitmq-c.git
+    GIT_TAG        v0.14.0
+    GIT_SHALLOW    TRUE
 )
 
-FetchContent_MakeAvailable(httplib json amqpcpp)
+FetchContent_MakeAvailable(httplib json rabbitmq-c)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
 add_executable(api-service ${SOURCES})
-target_link_libraries(api-service PRIVATE httplib::httplib nlohmann_json::nlohmann_json amqpcpp)
+target_include_directories(api-service PRIVATE ${rabbitmq-c_SOURCE_DIR}/include)
+target_link_libraries(api-service PRIVATE httplib::httplib nlohmann_json::nlohmann_json rabbitmq-static)

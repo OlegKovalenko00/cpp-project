@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <stdexcept>
 #include <thread>
 
 RabbitMQConfig load_rabbitmq_config() {
@@ -95,7 +96,15 @@ RabbitMQConsumer::~RabbitMQConsumer() {
 }
 
 void RabbitMQConsumer::connect() {
+    if (connected_) {
+        return;
+    }
+
     impl_->evbase_ = event_base_new();
+    if (!impl_->evbase_) {
+        throw std::runtime_error("Failed to create libevent base for RabbitMQ");
+    }
+
     impl_->handler_ = std::make_unique<LibEventHandler>(impl_->evbase_);
 
     std::string address = "amqp://" + config_.user + ":" + config_.password + "@" +
@@ -103,12 +112,29 @@ void RabbitMQConsumer::connect() {
 
     AMQP::Address amqp_address(address);
 
-    impl_->connection_ = std::make_unique<AMQP::TcpConnection>(
-        impl_->handler_.get(), amqp_address);
-    impl_->channel_ = std::make_unique<AMQP::TcpChannel>(impl_->connection_.get());
+    try {
+        impl_->connection_ = std::make_unique<AMQP::TcpConnection>(
+            impl_->handler_.get(), amqp_address);
+        impl_->channel_ = std::make_unique<AMQP::TcpChannel>(impl_->connection_.get());
+        connected_ = true;
+    } catch (const std::exception& ex) {
+        std::cerr << "Failed to connect to RabbitMQ: " << ex.what() << std::endl;
+        impl_->channel_.reset();
+        impl_->connection_.reset();
+        impl_->handler_.reset();
+        if (impl_->evbase_) {
+            event_base_free(impl_->evbase_);
+            impl_->evbase_ = nullptr;
+        }
+        throw;
+    }
 }
 
 void RabbitMQConsumer::subscribe() {
+    if (!impl_->channel_) {
+        throw std::runtime_error("RabbitMQ channel is not initialized");
+    }
+
     for (const auto& queue_name : config_.queues) {
         impl_->channel_->declareQueue(queue_name, AMQP::durable)
             .onSuccess([this, queue_name](const std::string& name, uint32_t messagecount, uint32_t consumercount) {
@@ -132,23 +158,39 @@ void RabbitMQConsumer::subscribe() {
 }
 
 void RabbitMQConsumer::start() {
-    std::cout << "RabbitMQ consumer started on queues: ";
-    for (size_t i = 0; i < config_.queues.size(); ++i) {
-        std::cout << config_.queues[i];
-        if (i < config_.queues.size() - 1) std::cout << ", ";
+    if (running_ || !impl_->evbase_) {
+        return;
     }
-    std::cout << std::endl;
-    event_base_dispatch(impl_->evbase_);
+
+    running_ = true;
+    event_thread_ = std::thread([this]() {
+        std::cout << "RabbitMQ consumer started on queues: ";
+        for (size_t i = 0; i < config_.queues.size(); ++i) {
+            std::cout << config_.queues[i];
+            if (i < config_.queues.size() - 1) std::cout << ", ";
+        }
+        std::cout << std::endl;
+
+        event_base_dispatch(impl_->evbase_);
+        running_ = false;
+        connected_ = false;
+    });
 }
 
 void RabbitMQConsumer::stop() {
     if (impl_->evbase_) {
         event_base_loopbreak(impl_->evbase_);
     }
+    if (event_thread_.joinable()) {
+        event_thread_.join();
+    }
     if (impl_->channel_) impl_->channel_.reset();
     if (impl_->connection_) impl_->connection_.reset();
+    if (impl_->handler_) impl_->handler_.reset();
     if (impl_->evbase_) {
         event_base_free(impl_->evbase_);
         impl_->evbase_ = nullptr;
     }
+    running_ = false;
+    connected_ = false;
 }

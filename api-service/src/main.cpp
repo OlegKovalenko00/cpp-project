@@ -1,4 +1,5 @@
 #include "handlers.hpp"
+#include "rabbitmq.hpp"
 
 #include <httplib.h>
 #include <iostream>

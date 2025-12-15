@@ -1,40 +1,10 @@
 #include "handlers.hpp"
 
 #include <iostream>
-#include <cstdlib>
+
 #include "rabbitmq.hpp"
 
 using json = nlohmann::json;
-
-// Безопасное чтение переменных окружения
-static std::string getEnvStr(const char* name, const std::string& defaultValue) {
-    const char* val = std::getenv(name);
-    return val ? val : defaultValue;
-}
-
-static int getEnvInt(const char* name, int defaultValue) {
-    const char* val = std::getenv(name);
-    return val ? std::stoi(val) : defaultValue;
-}
-
-// Глобальный RabbitMQ клиент (ленивая инициализация)
-static RabbitMQ* g_rabbitmq = nullptr;
-
-static RabbitMQ& getRabbitMQ() {
-    if (!g_rabbitmq) {
-        g_rabbitmq = new RabbitMQ(
-            getEnvStr("RABBITMQ_HOST", "localhost"),
-            getEnvInt("RABBITMQ_PORT", 5672),
-            getEnvStr("RABBITMQ_USERNAME", "guest"),
-            getEnvStr("RABBITMQ_PASSWORD", "guest"),
-            getEnvStr("RABBITMQ_VHOST", "/")
-        );
-        if (!g_rabbitmq->connect()) {
-            std::cerr << "[RabbitMQ] Failed to connect, messages will be lost" << std::endl;
-        }
-    }
-    return *g_rabbitmq;
-}
 
 // ==================== Helper Functions ====================
 

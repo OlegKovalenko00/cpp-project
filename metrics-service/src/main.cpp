@@ -1,3 +1,4 @@
+#include <exception>
 #include <iostream>
 #include <cstdlib>
 #include <thread>
@@ -144,9 +145,15 @@ int main(int argc, char* argv[]) {
     RabbitMQConfig rabbit_config = load_rabbitmq_config();
     RabbitMQConsumer rabbit(rabbit_config);
     std::cout << "Connecting to RabbitMQ at " << rabbit_config.host << ":" << rabbit_config.port << std::endl;
-    rabbit.connect();
-    rabbit.subscribe();
-    rabbit.start();
+    try {
+        rabbit.connect();
+        rabbit.subscribe();
+        rabbit.start();
+    } catch (const std::exception& ex) {
+        std::cerr << "RabbitMQ initialization failed: " << ex.what() << std::endl;
+        http_handler.stop();
+        return 1;
+    }
 
     // Worker pool for async message processing
     const int WORKER_COUNT = std::thread::hardware_concurrency() > 0 ? std::thread::hardware_concurrency() : 4;

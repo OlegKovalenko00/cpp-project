@@ -1,5 +1,7 @@
 #pragma once
 
+#include <amqpcpp.h>
+#include <event2/event.h>
 #include <amqp.h>
 #include <amqp_tcp_socket.h>
 #include <atomic>
@@ -81,4 +83,5 @@ private:
     std::thread event_thread_;
     MessageQueue message_queue_;
     std::atomic<bool> running_{false};
+    std::atomic<bool> connected_{false};
 };

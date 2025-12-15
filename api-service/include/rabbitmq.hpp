@@ -1,6 +1,13 @@
 #pragma once
 
 #include <string>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <tuple>
+#include <atomic>
+
 #include <amqp.h>
 #include <amqp_tcp_socket.h>
 
@@ -40,3 +47,4 @@ private:
     std::atomic<bool> running_{false};
 };
 
+RabbitMQ& getRabbitMQ();

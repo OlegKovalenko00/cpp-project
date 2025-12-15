@@ -6,7 +6,6 @@
 
 using json = nlohmann::json;
 
-// Безопасное чтение переменных окружения
 static std::string getEnvStr(const char* name, const std::string& defaultValue) {
     const char* val = std::getenv(name);
     return val ? val : defaultValue;
@@ -17,7 +16,6 @@ static int getEnvInt(const char* name, int defaultValue) {
     return val ? std::stoi(val) : defaultValue;
 }
 
-// Глобальный RabbitMQ клиент (ленивая инициализация)
 static RabbitMQ* g_rabbitmq = nullptr;
 
 static RabbitMQ& getRabbitMQ() {

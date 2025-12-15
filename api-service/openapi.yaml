@@ -204,6 +204,312 @@ paths:
                   field: "name"
                   reason: "required"
 
+  /aggregation/watermark:
+    get:
+      summary: Get aggregation watermark
+      operationId: getAggregationWatermark
+      responses:
+        '200':
+          description: Timestamp of the latest completed aggregation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetWatermarkResponse'
+              example:
+                last_aggregated_at: "2024-12-06T10:05:00Z"
+        '500':
+          description: Aggregation service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INTERNAL_ERROR"
+                message: "Aggregation service unavailable"
+
+  /aggregation/page-views:
+    post:
+      summary: Get aggregated page view metrics
+      operationId: getPageViewsAggregation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetPageViewsAggRequest'
+            example:
+              project_id: "proj_123"
+              time_range:
+                from: "2024-12-06T09:00:00Z"
+                to: "2024-12-06T10:00:00Z"
+              page: "/dashboard"
+              pagination:
+                limit: 100
+                offset: 0
+      responses:
+        '200':
+          description: Aggregated page view buckets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetPageViewsAggResponse'
+              example:
+                rows:
+                  - time_bucket: "2024-12-06T10:00:00Z"
+                    project_id: "proj_123"
+                    page: "/dashboard"
+                    views_count: 2400
+                    unique_users: 350
+                    unique_sessions: 420
+                    created_at: "2024-12-06T10:05:00Z"
+        '400':
+          description: Invalid aggregation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "VALIDATION_ERROR"
+                message: "time_range.to must be after time_range.from"
+        '500':
+          description: Aggregation service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INTERNAL_ERROR"
+                message: "Failed to fetch aggregation results"
+
+  /aggregation/clicks:
+    post:
+      summary: Get aggregated click metrics
+      operationId: getClicksAggregation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetClicksAggRequest'
+            example:
+              project_id: "proj_123"
+              time_range:
+                from: "2024-12-06T09:00:00Z"
+                to: "2024-12-06T10:00:00Z"
+              page: "/pricing"
+              element_id: "cta-subscribe-button"
+              pagination:
+                limit: 100
+                offset: 0
+      responses:
+        '200':
+          description: Aggregated click buckets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetClicksAggResponse'
+              example:
+                rows:
+                  - time_bucket: "2024-12-06T10:00:00Z"
+                    project_id: "proj_123"
+                    page: "/pricing"
+                    element_id: "cta-subscribe-button"
+                    clicks_count: 180
+                    unique_users: 120
+                    unique_sessions: 140
+                    created_at: "2024-12-06T10:05:00Z"
+        '400':
+          description: Invalid aggregation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "VALIDATION_ERROR"
+                message: "project_id is required"
+        '500':
+          description: Aggregation service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INTERNAL_ERROR"
+                message: "Failed to fetch aggregation results"
+
+  /aggregation/performance:
+    post:
+      summary: Get aggregated performance metrics
+      operationId: getPerformanceAggregation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetPerformanceAggRequest'
+            example:
+              project_id: "proj_123"
+              time_range:
+                from: "2024-12-06T09:00:00Z"
+                to: "2024-12-06T10:00:00Z"
+              page: "/dashboard"
+              pagination:
+                limit: 100
+                offset: 0
+      responses:
+        '200':
+          description: Aggregated performance buckets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetPerformanceAggResponse'
+              example:
+                rows:
+                  - time_bucket: "2024-12-06T10:00:00Z"
+                    project_id: "proj_123"
+                    page: "/dashboard"
+                    samples_count: 500
+                    avg_total_load_ms: 1100
+                    p95_total_load_ms: 1500
+                    avg_ttfb_ms: 120
+                    p95_ttfb_ms: 200
+                    avg_fcp_ms: 450
+                    p95_fcp_ms: 600
+                    avg_lcp_ms: 900
+                    p95_lcp_ms: 1250
+                    created_at: "2024-12-06T10:05:00Z"
+        '400':
+          description: Invalid aggregation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "VALIDATION_ERROR"
+                message: "project_id is required"
+        '500':
+          description: Aggregation service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INTERNAL_ERROR"
+                message: "Failed to fetch aggregation results"
+
+  /aggregation/errors:
+    post:
+      summary: Get aggregated error metrics
+      operationId: getErrorsAggregation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetErrorsAggRequest'
+            example:
+              project_id: "proj_123"
+              time_range:
+                from: "2024-12-06T09:00:00Z"
+                to: "2024-12-06T10:00:00Z"
+              page: "/dashboard"
+              error_type: "js_exception"
+              pagination:
+                limit: 100
+                offset: 0
+      responses:
+        '200':
+          description: Aggregated error buckets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetErrorsAggResponse'
+              example:
+                rows:
+                  - time_bucket: "2024-12-06T10:00:00Z"
+                    project_id: "proj_123"
+                    page: "/dashboard"
+                    error_type: "js_exception"
+                    errors_count: 45
+                    warning_count: 12
+                    critical_count: 8
+                    unique_users: 30
+                    created_at: "2024-12-06T10:05:00Z"
+        '400':
+          description: Invalid aggregation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "VALIDATION_ERROR"
+                message: "project_id is required"
+        '500':
+          description: Aggregation service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INTERNAL_ERROR"
+                message: "Failed to fetch aggregation results"
+
+  /aggregation/custom-events:
+    post:
+      summary: Get aggregated custom event metrics
+      operationId: getCustomEventsAggregation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetCustomEventsAggRequest'
+            example:
+              project_id: "proj_123"
+              time_range:
+                from: "2024-12-06T09:00:00Z"
+                to: "2024-12-06T10:00:00Z"
+              event_name: "signup_completed"
+              page: "/signup/success"
+              pagination:
+                limit: 100
+                offset: 0
+      responses:
+        '200':
+          description: Aggregated custom event buckets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetCustomEventsAggResponse'
+              example:
+                rows:
+                  - time_bucket: "2024-12-06T10:00:00Z"
+                    project_id: "proj_123"
+                    event_name: "signup_completed"
+                    page: "/signup/success"
+                    events_count: 75
+                    unique_users: 60
+                    unique_sessions: 65
+                    created_at: "2024-12-06T10:05:00Z"
+        '400':
+          description: Invalid aggregation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "VALIDATION_ERROR"
+                message: "event_name is required"
+        '500':
+          description: Aggregation service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "INTERNAL_ERROR"
+                message: "Failed to fetch aggregation results"
+
 components:
   schemas:
     HealthResponse:
@@ -394,3 +700,391 @@ components:
           type: integer
           format: int64
           example: 1733505620
+
+    TimeRange:
+      type: object
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          format: date-time
+          description: Start of the range (inclusive)
+          example: "2024-12-06T09:00:00Z"
+        to:
+          type: string
+          format: date-time
+          description: End of the range (exclusive)
+          example: "2024-12-06T10:00:00Z"
+
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Max rows to return
+          example: 100
+        offset:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Offset for paging
+          example: 0
+
+    GetWatermarkResponse:
+      type: object
+      required: [last_aggregated_at]
+      properties:
+        last_aggregated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the most recent aggregation pass
+          example: "2024-12-06T10:05:00Z"
+
+    AggPageViewsRow:
+      type: object
+      required:
+        [time_bucket, project_id, page, views_count, unique_users, unique_sessions, created_at]
+      properties:
+        time_bucket:
+          type: string
+          format: date-time
+          description: Start time of the aggregated bucket
+          example: "2024-12-06T10:00:00Z"
+        project_id:
+          type: string
+          example: "proj_123"
+        page:
+          type: string
+          example: "/dashboard"
+        views_count:
+          type: integer
+          format: int64
+          example: 2400
+        unique_users:
+          type: integer
+          format: int64
+          example: 350
+        unique_sessions:
+          type: integer
+          format: int64
+          example: 420
+        created_at:
+          type: string
+          format: date-time
+          description: When this aggregate row was created
+          example: "2024-12-06T10:05:00Z"
+
+    AggClicksRow:
+      type: object
+      required:
+        [time_bucket, project_id, page, clicks_count, unique_users, unique_sessions, created_at]
+      properties:
+        time_bucket:
+          type: string
+          format: date-time
+          description: Start time of the aggregated bucket
+          example: "2024-12-06T10:00:00Z"
+        project_id:
+          type: string
+          example: "proj_123"
+        page:
+          type: string
+          example: "/pricing"
+        element_id:
+          type: string
+          nullable: true
+          example: "cta-subscribe-button"
+        clicks_count:
+          type: integer
+          format: int64
+          example: 180
+        unique_users:
+          type: integer
+          format: int64
+          example: 120
+        unique_sessions:
+          type: integer
+          format: int64
+          example: 140
+        created_at:
+          type: string
+          format: date-time
+          description: When this aggregate row was created
+          example: "2024-12-06T10:05:00Z"
+
+    AggPerformanceRow:
+      type: object
+      required:
+        [time_bucket, project_id, page, samples_count, avg_total_load_ms, p95_total_load_ms, avg_ttfb_ms, p95_ttfb_ms, avg_fcp_ms, p95_fcp_ms, avg_lcp_ms, p95_lcp_ms, created_at]
+      properties:
+        time_bucket:
+          type: string
+          format: date-time
+          description: Start time of the aggregated bucket
+          example: "2024-12-06T10:00:00Z"
+        project_id:
+          type: string
+          example: "proj_123"
+        page:
+          type: string
+          example: "/dashboard"
+        samples_count:
+          type: integer
+          format: int64
+          example: 500
+        avg_total_load_ms:
+          type: number
+          format: double
+          example: 1100
+        p95_total_load_ms:
+          type: number
+          format: double
+          example: 1500
+        avg_ttfb_ms:
+          type: number
+          format: double
+          example: 120
+        p95_ttfb_ms:
+          type: number
+          format: double
+          example: 200
+        avg_fcp_ms:
+          type: number
+          format: double
+          example: 450
+        p95_fcp_ms:
+          type: number
+          format: double
+          example: 600
+        avg_lcp_ms:
+          type: number
+          format: double
+          example: 900
+        p95_lcp_ms:
+          type: number
+          format: double
+          example: 1250
+        created_at:
+          type: string
+          format: date-time
+          description: When this aggregate row was created
+          example: "2024-12-06T10:05:00Z"
+
+    AggErrorsRow:
+      type: object
+      required:
+        [time_bucket, project_id, page, errors_count, warning_count, critical_count, unique_users, created_at]
+      properties:
+        time_bucket:
+          type: string
+          format: date-time
+          description: Start time of the aggregated bucket
+          example: "2024-12-06T10:00:00Z"
+        project_id:
+          type: string
+          example: "proj_123"
+        page:
+          type: string
+          example: "/dashboard"
+        error_type:
+          type: string
+          nullable: true
+          example: "js_exception"
+        errors_count:
+          type: integer
+          format: int64
+          example: 45
+        warning_count:
+          type: integer
+          format: int64
+          example: 12
+        critical_count:
+          type: integer
+          format: int64
+          example: 8
+        unique_users:
+          type: integer
+          format: int64
+          example: 30
+        created_at:
+          type: string
+          format: date-time
+          description: When this aggregate row was created
+          example: "2024-12-06T10:05:00Z"
+
+    AggCustomEventsRow:
+      type: object
+      required:
+        [time_bucket, project_id, event_name, events_count, unique_users, unique_sessions, created_at]
+      properties:
+        time_bucket:
+          type: string
+          format: date-time
+          description: Start time of the aggregated bucket
+          example: "2024-12-06T10:00:00Z"
+        project_id:
+          type: string
+          example: "proj_123"
+        event_name:
+          type: string
+          example: "signup_completed"
+        page:
+          type: string
+          nullable: true
+          example: "/signup/success"
+        events_count:
+          type: integer
+          format: int64
+          example: 75
+        unique_users:
+          type: integer
+          format: int64
+          example: 60
+        unique_sessions:
+          type: integer
+          format: int64
+          example: 65
+        created_at:
+          type: string
+          format: date-time
+          description: When this aggregate row was created
+          example: "2024-12-06T10:05:00Z"
+
+    GetPageViewsAggRequest:
+      type: object
+      required: [project_id, time_range]
+      properties:
+        project_id:
+          type: string
+          example: "proj_123"
+        time_range:
+          $ref: '#/components/schemas/TimeRange'
+        page:
+          type: string
+          nullable: true
+          example: "/dashboard"
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    GetPageViewsAggResponse:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AggPageViewsRow'
+
+    GetClicksAggRequest:
+      type: object
+      required: [project_id, time_range]
+      properties:
+        project_id:
+          type: string
+          example: "proj_123"
+        time_range:
+          $ref: '#/components/schemas/TimeRange'
+        page:
+          type: string
+          nullable: true
+          example: "/pricing"
+        element_id:
+          type: string
+          nullable: true
+          example: "cta-subscribe-button"
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    GetClicksAggResponse:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AggClicksRow'
+
+    GetPerformanceAggRequest:
+      type: object
+      required: [project_id, time_range]
+      properties:
+        project_id:
+          type: string
+          example: "proj_123"
+        time_range:
+          $ref: '#/components/schemas/TimeRange'
+        page:
+          type: string
+          nullable: true
+          example: "/dashboard"
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    GetPerformanceAggResponse:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AggPerformanceRow'
+
+    GetErrorsAggRequest:
+      type: object
+      required: [project_id, time_range]
+      properties:
+        project_id:
+          type: string
+          example: "proj_123"
+        time_range:
+          $ref: '#/components/schemas/TimeRange'
+        page:
+          type: string
+          nullable: true
+          example: "/dashboard"
+        error_type:
+          type: string
+          nullable: true
+          example: "js_exception"
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    GetErrorsAggResponse:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AggErrorsRow'
+
+    GetCustomEventsAggRequest:
+      type: object
+      required: [project_id, time_range, event_name]
+      properties:
+        project_id:
+          type: string
+          example: "proj_123"
+        time_range:
+          $ref: '#/components/schemas/TimeRange'
+        event_name:
+          type: string
+          example: "signup_completed"
+        page:
+          type: string
+          nullable: true
+          example: "/signup/success"
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    GetCustomEventsAggResponse:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AggCustomEventsRow'

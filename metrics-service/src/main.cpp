@@ -127,7 +127,6 @@ int main(int argc, char* argv[]) {
     std::cout << "Metrics service starting..." << std::endl;
 
     DatabaseConfig db_config = load_database_config();
-    
     std::cout << "Testing database connection..." << std::endl;
     if (!test_database_connection(db_config)) {
         std::cerr << "Failed to connect to database. Exiting." << std::endl;
@@ -144,24 +143,40 @@ int main(int argc, char* argv[]) {
 
     RabbitMQConfig rabbit_config = load_rabbitmq_config();
     RabbitMQConsumer rabbit(rabbit_config);
-    
     std::cout << "Connecting to RabbitMQ at " << rabbit_config.host << ":" << rabbit_config.port << std::endl;
     rabbit.connect();
-    rabbit.subscribe([&db_config](const std::string& queue, const std::string& message) {
-        process_message(queue, message, db_config);
-    });
+    rabbit.subscribe();
     rabbit.start();
+
+    // Worker pool for async message processing
+    const int WORKER_COUNT = std::thread::hardware_concurrency() > 0 ? std::thread::hardware_concurrency() : 4;
+    std::vector<std::thread> workers;
+    auto& msg_queue = rabbit.get_message_queue();
+    std::atomic<bool> running{true};
+    for (int i = 0; i < WORKER_COUNT; ++i) {
+        workers.emplace_back([&db_config, &msg_queue, &running]() {
+            while (running) {
+                RabbitMQMessage msg;
+                if (msg_queue.pop(msg)) {
+                    process_message(msg.queue, msg.body, db_config);
+                }
+            }
+        });
+    }
 
     const char* port_env = std::getenv("GRPC_PORT");
     std::string port = port_env ? std::string(port_env) : "50051";
     std::string server_address = "0.0.0.0:" + port;
-
     std::cout << "Starting gRPC server on " << server_address << std::endl;
-    
     run_grpc_server(server_address, db_config);
 
+    // Shutdown
+    running = false;
+    msg_queue.stop();
+    for (auto& t : workers) {
+        if (t.joinable()) t.join();
+    }
     rabbit.stop();
     http_handler.stop();
-
     return 0;
 }

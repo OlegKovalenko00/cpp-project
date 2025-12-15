@@ -76,6 +76,7 @@ private:
     struct event* fd_event_ = nullptr;
 };
 
+
 class RabbitMQConsumer::Impl {
 public:
     struct event_base* evbase_ = nullptr;
@@ -84,8 +85,10 @@ public:
     std::unique_ptr<AMQP::TcpChannel> channel_;
 };
 
+
 RabbitMQConsumer::RabbitMQConsumer(const RabbitMQConfig& config)
     : config_(config), impl_(std::make_unique<Impl>()) {}
+
 
 RabbitMQConsumer::~RabbitMQConsumer() {
     stop();
@@ -94,34 +97,28 @@ RabbitMQConsumer::~RabbitMQConsumer() {
 void RabbitMQConsumer::connect() {
     impl_->evbase_ = event_base_new();
     impl_->handler_ = std::make_unique<LibEventHandler>(impl_->evbase_);
-    
-    std::string address = "amqp://" + config_.user + ":" + config_.password + "@" + 
+
+    std::string address = "amqp://" + config_.user + ":" + config_.password + "@" +
                           config_.host + ":" + std::to_string(config_.port) + config_.vhost;
-    
+
     AMQP::Address amqp_address(address);
-    
+
     impl_->connection_ = std::make_unique<AMQP::TcpConnection>(
         impl_->handler_.get(), amqp_address);
     impl_->channel_ = std::make_unique<AMQP::TcpChannel>(impl_->connection_.get());
 }
 
-void RabbitMQConsumer::subscribe(MessageCallback callback) {
+void RabbitMQConsumer::subscribe() {
     for (const auto& queue_name : config_.queues) {
         impl_->channel_->declareQueue(queue_name, AMQP::durable)
-            .onSuccess([this, callback, queue_name](const std::string& name, uint32_t messagecount, uint32_t consumercount) {
+            .onSuccess([this, queue_name](const std::string& name, uint32_t messagecount, uint32_t consumercount) {
                 std::cout << "Queue '" << name << "' declared, messages: " << messagecount << std::endl;
-                
+
                 impl_->channel_->consume(queue_name)
-                    .onReceived([this, callback, queue_name](const AMQP::Message& message, uint64_t deliveryTag, bool redelivered) {
+                    .onReceived([this, queue_name](const AMQP::Message& message, uint64_t deliveryTag, bool redelivered) {
                         std::string body(message.body(), message.bodySize());
-                        
-                        try {
-                            callback(queue_name, body);
-                            impl_->channel_->ack(deliveryTag);
-                        } catch (const std::exception& e) {
-                            std::cerr << "Message processing error on queue " << queue_name << ": " << e.what() << std::endl;
-                            impl_->channel_->reject(deliveryTag, true);
-                        }
+                        message_queue_.push({queue_name, body});
+                        impl_->channel_->ack(deliveryTag);
                     })
                     .onError([queue_name](const char* message) {
                         std::cerr << "Consume error on queue " << queue_name << ": " << message << std::endl;
@@ -134,26 +131,20 @@ void RabbitMQConsumer::subscribe(MessageCallback callback) {
 }
 
 void RabbitMQConsumer::start() {
-    running_ = true;
-    consumer_thread_ = std::thread([this]() {
-        std::cout << "RabbitMQ consumer started on queues: ";
-        for (size_t i = 0; i < config_.queues.size(); ++i) {
-            std::cout << config_.queues[i];
-            if (i < config_.queues.size() - 1) std::cout << ", ";
-        }
-        std::cout << std::endl;
-        
-        while (running_) {
-            event_base_loop(impl_->evbase_, EVLOOP_NONBLOCK);
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-    });
+    std::cout << "RabbitMQ consumer started on queues: ";
+    for (size_t i = 0; i < config_.queues.size(); ++i) {
+        std::cout << config_.queues[i];
+        if (i < config_.queues.size() - 1) std::cout << ", ";
+    }
+    std::cout << std::endl;
+    // Асинхронно: event_base_dispatch блокирует и обрабатывает события libevent/AMQP-CPP
+    event_base_dispatch(impl_->evbase_);
 }
 
 void RabbitMQConsumer::stop() {
-    running_ = false;
-    if (consumer_thread_.joinable()) {
-        consumer_thread_.join();
+    // event_base_loopbreak можно вызвать, если нужно завершить event_base_dispatch
+    if (impl_->evbase_) {
+        event_base_loopbreak(impl_->evbase_);
     }
     if (impl_->channel_) impl_->channel_.reset();
     if (impl_->connection_) impl_->connection_.reset();

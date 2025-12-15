@@ -42,6 +42,55 @@ public:
     // Записать все агрегаты
     bool writeAggregationResult(const AggregationResult& result);
 
+    // Методы чтения агрегатов для gRPC сервера
+    std::vector<AggregatedPageViews> readPageViews(
+        const std::string& projectId,
+        std::chrono::system_clock::time_point from,
+        std::chrono::system_clock::time_point to,
+        const std::string& pageFilter = "",
+        int limit = 1000,
+        int offset = 0
+    );
+
+    std::vector<AggregatedClicks> readClicks(
+        const std::string& projectId,
+        std::chrono::system_clock::time_point from,
+        std::chrono::system_clock::time_point to,
+        const std::string& pageFilter = "",
+        const std::string& elementIdFilter = "",
+        int limit = 1000,
+        int offset = 0
+    );
+
+    std::vector<AggregatedPerformance> readPerformance(
+        const std::string& projectId,
+        std::chrono::system_clock::time_point from,
+        std::chrono::system_clock::time_point to,
+        const std::string& pageFilter = "",
+        int limit = 1000,
+        int offset = 0
+    );
+
+    std::vector<AggregatedErrors> readErrors(
+        const std::string& projectId,
+        std::chrono::system_clock::time_point from,
+        std::chrono::system_clock::time_point to,
+        const std::string& pageFilter = "",
+        const std::string& errorTypeFilter = "",
+        int limit = 1000,
+        int offset = 0
+    );
+
+    std::vector<AggregatedCustomEvents> readCustomEvents(
+        const std::string& projectId,
+        std::chrono::system_clock::time_point from,
+        std::chrono::system_clock::time_point to,
+        const std::string& eventNameFilter = "",
+        const std::string& pageFilter = "",
+        int limit = 1000,
+        int offset = 0
+    );
+
 private:
     std::string formatTimestamp(std::chrono::system_clock::time_point tp) const;
     std::chrono::system_clock::time_point parseTimestamp(const std::string& ts) const;

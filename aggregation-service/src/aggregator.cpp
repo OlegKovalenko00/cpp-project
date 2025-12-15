@@ -18,83 +18,114 @@ Aggregator::~Aggregator() = default;
 void Aggregator::run() {
     std::cout << "Aggregator::run() started" << std::endl;
 
-    // 1. Получаем watermark - с какого времени агрегировать
-    auto watermark = database_.getWatermark();
-    auto now = std::chrono::system_clock::now();
+    try {
+        // 1. Получаем watermark - с какого времени агрегировать
+        auto watermark = database_.getWatermark();
+        auto now = std::chrono::system_clock::now();
 
-    std::cout << "Watermark: last aggregated at epoch + "
-              << std::chrono::duration_cast<std::chrono::seconds>(watermark.time_since_epoch()).count()
-              << " seconds" << std::endl;
+        std::cout << "Watermark: last aggregated at epoch + "
+                  << std::chrono::duration_cast<std::chrono::seconds>(watermark.time_since_epoch()).count()
+                  << " seconds" << std::endl;
 
-    // 2. Получаем события от metrics-service через gRPC
-    std::vector<RawEvent> rawEvents;
+        // 2. Получаем события от metrics-service через gRPC
+        std::vector<RawEvent> rawEvents;
 
-    if (metricsClient_.isConnected()) {
-        std::cout << "Fetching events from metrics-service via gRPC..." << std::endl;
-        rawEvents = metricsClient_.fetchAllEvents(watermark, now);
-        std::cout << "Received " << rawEvents.size() << " events from metrics-service" << std::endl;
-    } else {
-        std::cout << "Warning: metrics-service not available, using test data" << std::endl;
+        try {
+            if (metricsClient_.isConnected()) {
+                std::cout << "Fetching events from metrics-service via gRPC..." << std::endl;
+                rawEvents = metricsClient_.fetchAllEvents(watermark, now);
+                std::cout << "Received " << rawEvents.size() << " events from metrics-service" << std::endl;
+            } else {
+                std::cout << "Warning: metrics-service not available, using test data" << std::endl;
 
-        // Fallback: создаём тестовые события для проверки
-        // Тестовые page_view события
-        for (int i = 0; i < 5; ++i) {
-            RawEvent e;
-            e.projectId = "test-project";
-            e.page = "/home";
-            e.eventType = "page_view";
-            e.userId = "user-" + std::to_string(i % 3);
-            e.sessionId = "session-" + std::to_string(i);
-            e.timestamp = now - std::chrono::minutes(i);
-            rawEvents.push_back(e);
+                // Fallback: создаём тестовые события для проверки
+                // Тестовые page_view события
+                for (int i = 0; i < 5; ++i) {
+                    RawEvent e;
+                    e.projectId = "test-project";
+                    e.page = "/home";
+                    e.eventType = "page_view";
+                    e.userId = "user-" + std::to_string(i % 3);
+                    e.sessionId = "session-" + std::to_string(i);
+                    e.timestamp = now - std::chrono::minutes(i);
+                    rawEvents.push_back(e);
+                }
+
+                // Тестовые performance события
+                for (int i = 0; i < 3; ++i) {
+                    RawEvent e;
+                    e.projectId = "test-project";
+                    e.page = "/home";
+                    e.eventType = "performance";
+                    e.userId = "user-" + std::to_string(i);
+                    e.sessionId = "session-perf-" + std::to_string(i);
+                    e.timestamp = now - std::chrono::minutes(i);
+                    e.totalPageLoadMs = 100.0 + i * 50.0;
+                    e.ttfbMs = 20.0 + i * 5.0;
+                    e.fcpMs = 50.0 + i * 10.0;
+                    e.lcpMs = 80.0 + i * 15.0;
+                    rawEvents.push_back(e);
+                }
+
+                // Тестовые error события
+                {
+                    RawEvent e;
+                    e.projectId = "test-project";
+                    e.page = "/checkout";
+                    e.eventType = "error";
+                    e.isError = true;
+                    e.errorType = "NetworkError";
+                    e.errorMessage = "Failed to fetch";
+                    e.severity = 2; // ERROR
+                    e.userId = "user-1";
+                    e.timestamp = now;
+                    rawEvents.push_back(e);
+                }
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "ERROR: Failed to fetch events from metrics-service: " << e.what() << std::endl;
+            throw std::runtime_error("Failed to fetch events: " + std::string(e.what()));
         }
 
-        // Тестовые performance события
-        for (int i = 0; i < 3; ++i) {
-            RawEvent e;
-            e.projectId = "test-project";
-            e.page = "/home";
-            e.eventType = "performance";
-            e.userId = "user-" + std::to_string(i);
-            e.sessionId = "session-perf-" + std::to_string(i);
-            e.timestamp = now - std::chrono::minutes(i);
-            e.totalPageLoadMs = 100.0 + i * 50.0;
-            e.ttfbMs = 20.0 + i * 5.0;
-            e.fcpMs = 50.0 + i * 10.0;
-            e.lcpMs = 80.0 + i * 15.0;
-            rawEvents.push_back(e);
+        std::cout << "Processing " << rawEvents.size() << " events" << std::endl;
+
+        // 3. Агрегируем события (5-минутные бакеты)
+        AggregationResult result;
+        try {
+            result = aggregateEvents(rawEvents, std::chrono::minutes(5));
+        } catch (const std::exception& e) {
+            std::cerr << "ERROR: Failed to aggregate events: " << e.what() << std::endl;
+            throw std::runtime_error("Failed to aggregate events: " + std::string(e.what()));
         }
 
-        // Тестовые error события
-        {
-            RawEvent e;
-            e.projectId = "test-project";
-            e.page = "/checkout";
-            e.eventType = "error";
-            e.isError = true;
-            e.errorType = "NetworkError";
-            e.errorMessage = "Failed to fetch";
-            e.severity = 2; // ERROR
-            e.userId = "user-1";
-            e.timestamp = now;
-            rawEvents.push_back(e);
+        // 4. Записываем в БД
+        bool success = false;
+        try {
+            success = database_.writeAggregationResult(result);
+        } catch (const std::exception& e) {
+            std::cerr << "ERROR: Failed to write aggregation results: " << e.what() << std::endl;
+            throw std::runtime_error("Failed to write to database: " + std::string(e.what()));
         }
-    }
 
-    std::cout << "Processing " << rawEvents.size() << " events" << std::endl;
-
-    // 3. Агрегируем события (5-минутные бакеты)
-    auto result = aggregateEvents(rawEvents, std::chrono::minutes(5));
-
-    // 4. Записываем в БД
-    bool success = database_.writeAggregationResult(result);
-
-    if (success) {
-        // 5. Обновляем watermark
-        database_.updateWatermark(now);
-        std::cout << "Aggregation completed successfully. Watermark updated." << std::endl;
-    } else {
-        std::cerr << "Failed to write aggregation results to database." << std::endl;
+        if (success) {
+            // 5. Обновляем watermark
+            try {
+                database_.updateWatermark(now);
+                std::cout << "Aggregation completed successfully. Watermark updated." << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "ERROR: Failed to update watermark: " << e.what() << std::endl;
+                throw std::runtime_error("Failed to update watermark: " + std::string(e.what()));
+            }
+        } else {
+            std::cerr << "Failed to write aggregation results to database." << std::endl;
+            throw std::runtime_error("Failed to write aggregation results");
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "ERROR in Aggregator::run(): " << e.what() << std::endl;
+        throw;  // Пробрасываем исключение выше для обработки в main
+    } catch (...) {
+        std::cerr << "UNKNOWN ERROR in Aggregator::run()" << std::endl;
+        throw std::runtime_error("Unknown error in aggregation cycle");
     }
 }
 

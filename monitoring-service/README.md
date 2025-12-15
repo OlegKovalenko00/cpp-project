@@ -58,6 +58,19 @@ CREATE TABLE IF NOT EXISTS logs (
 );
 ```
 
+### Переменные окружения
+
+- `HTTP_PORT` — порт HTTP-сервера (по умолчанию `8083`).
+- `POSTGRES_HOST` / `POSTGRES_PORT` — адрес БД (по умолчанию `localhost:5432`).
+- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` — реквизиты подключения (по умолчанию `postgres` / `postgres` / `postgres`).
+
+### Эндпоинты
+
+- `GET /health/ping` — liveness.
+- `GET /health/ready` — readiness (проверяет подключение к БД).
+- `GET /uptime?service=<name>[&period=day|week|month|year]` — количество успешных (`OK`) записей для сервиса за сутки/неделю/месяц/год. Если `period` не указан — вернутся все четыре.
+- Короткие маршруты для конкретного периода: `GET /uptime/day|week|month|year?service=<name>`.
+
 ## Структура проекта
 
 ```

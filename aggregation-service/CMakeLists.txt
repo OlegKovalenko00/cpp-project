@@ -70,15 +70,27 @@ target_include_directories(aggregation-core PUBLIC
         ${GENERATED_DIR}
 )
 
-target_link_libraries(aggregation-core PUBLIC
-        ${LIBPQ_LIBRARIES}
-        protobuf::libprotobuf
-        gRPC::grpc++
-        httplib::httplib
-        nlohmann_json::nlohmann_json
-        OpenSSL::SSL
-        OpenSSL::Crypto
-)
+if(USE_SYSTEM_HTTPLIB)
+    target_link_libraries(aggregation-core PUBLIC
+            ${LIBPQ_LIBRARIES}
+            protobuf::libprotobuf
+            gRPC::grpc++
+            httplib_header
+            nlohmann_json::nlohmann_json
+            OpenSSL::SSL
+            OpenSSL::Crypto
+    )
+else()
+    target_link_libraries(aggregation-core PUBLIC
+            ${LIBPQ_LIBRARIES}
+            protobuf::libprotobuf
+            gRPC::grpc++
+            httplib::httplib
+            nlohmann_json::nlohmann_json
+            OpenSSL::SSL
+            OpenSSL::Crypto
+    )
+endif()
 
 add_executable(aggregation-service src/main.cpp)
 target_link_libraries(aggregation-service PRIVATE aggregation-core)

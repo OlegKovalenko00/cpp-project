@@ -74,13 +74,8 @@ void handlePageView(const httplib::Request& req, httplib::Response& res) {
 
         std::cout << "[PageView] page=" << event.page << std::endl;
 
-        if (!getRabbitMQ().publish("", "page_views", json(event).dump())) {
-            sendError(res, 500, ErrorCode::InternalError,
-                      "Failed to publish page view event");
-            return;
-        } else {
-            std::cout << "[PageView] Published event for page=" << event.page << std::endl;
-        }
+        getRabbitMQ().async_publish("", "page_views", json(event).dump());
+        std::cout << "[PageView] Published event for page=" << event.page << std::endl;
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidPageView,
@@ -110,13 +105,8 @@ void handleClick(const httplib::Request& req, httplib::Response& res) {
         std::cout << "[Click] page=" << event.page
                   << " element_id=" << event.element_id << std::endl;
 
-        if (!getRabbitMQ().publish("", "clicks", json(event).dump())) {
-            sendError(res, 500, ErrorCode::InternalError,
-                      "Failed to publish click event");
-            return;
-        } else {
-            std::cout << "[Click] Published event for page=" << event.page << " element_id=" << event.element_id << std::endl;
-        }
+        getRabbitMQ().async_publish("", "clicks", json(event).dump());
+        std::cout << "[Click] Published event for page=" << event.page << " element_id=" << event.element_id << std::endl;
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidClickEvent,
@@ -166,13 +156,8 @@ void handlePerformance(const httplib::Request& req, httplib::Response& res) {
 
         std::cout << "[Performance] page=" << event.page << std::endl;
 
-        if (!getRabbitMQ().publish("", "performance_events", json(event).dump())) {
-            sendError(res, 500, ErrorCode::InternalError,
-                      "Failed to publish performance event");
-            return;
-        } else {
-            std::cout << "[Performance] Published event for page=" << event.page << std::endl;
-        }
+        getRabbitMQ().async_publish("", "performance_events", json(event).dump());
+        std::cout << "[Performance] Published event for page=" << event.page << std::endl;
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidPerformanceEvent,
@@ -208,13 +193,8 @@ void handleErrorEvent(const httplib::Request& req, httplib::Response& res) {
         std::cout << "[ErrorEvent] page=" << event.page
                   << " error_type=" << event.error_type << std::endl;
 
-        if (!getRabbitMQ().publish("", "error_events", json(event).dump())) {
-            sendError(res, 500, ErrorCode::InternalError,
-                      "Failed to publish error event");
-            return;
-        } else {
-            std::cout << " DSJKLFJDSLKJFL:DSKJFLKSDJFLKDJSFLKDSJFKLDF [ErrorEvent] Published event for page=" << event.page << " error_type=" << event.error_type << std::endl;
-        }
+        getRabbitMQ().async_publish("", "error_events", json(event).dump());
+        std::cout << "[ErrorEvent] Published event for page=" << event.page << " error_type=" << event.error_type << std::endl;
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidErrorEvent,
@@ -237,13 +217,8 @@ void handleCustomEvent(const httplib::Request& req, httplib::Response& res) {
 
         std::cout << "[CustomEvent] name=" << event.name << std::endl;
 
-        if (!getRabbitMQ().publish("", "custom_events", json(event).dump())) {
-            sendError(res, 500, ErrorCode::InternalError,
-                      "Failed to publish custom event");
-            return;
-        } else {
-            std::cout << "[CustomEvent] Published event name=" << event.name << std::endl;
-        }
+        getRabbitMQ().async_publish("", "custom_events", json(event).dump());
+        std::cout << "[CustomEvent] Published event name=" << event.name << std::endl;
         sendAccepted(res);
     } catch (const json::exception& e) {
         sendError(res, 400, ErrorCode::InvalidCustomEvent,

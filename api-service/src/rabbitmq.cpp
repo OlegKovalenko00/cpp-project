@@ -1,3 +1,39 @@
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <tuple>
+#include <atomic>
+void RabbitMQ::start_async_publisher() {
+    running_ = true;
+    publisher_thread_ = std::thread([this]() {
+        while (running_) {
+            std::unique_lock<std::mutex> lock(queue_mutex_);
+            queue_cv_.wait(lock, [this]{ return !publish_queue_.empty() || !running_; });
+            while (!publish_queue_.empty()) {
+                auto [exchange, routing_key, message] = publish_queue_.front();
+                publish_queue_.pop();
+                lock.unlock();
+                this->publish(exchange, routing_key, message);
+                lock.lock();
+            }
+        }
+    });
+}
+
+void RabbitMQ::stop_async_publisher() {
+    running_ = false;
+    queue_cv_.notify_all();
+    if (publisher_thread_.joinable()) publisher_thread_.join();
+}
+
+void RabbitMQ::async_publish(const std::string& exchange, const std::string& routing_key, const std::string& message) {
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        publish_queue_.emplace(exchange, routing_key, message);
+    }
+    queue_cv_.notify_one();
+}
 #include "rabbitmq.hpp"
 #include <iostream>
 #include <cstring>

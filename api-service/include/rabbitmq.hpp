@@ -14,6 +14,11 @@ public:
     bool publish(const std::string& exchange, const std::string& routing_key, const std::string& message);
     bool isConnected() const { return connected_; }
 
+    // Асинхронная публикация
+    void start_async_publisher();
+    void stop_async_publisher();
+    void async_publish(const std::string& exchange, const std::string& routing_key, const std::string& message);
+
 private:
     std::string host_;
     int port_;
@@ -26,5 +31,12 @@ private:
     bool connected_ = false;
     
     bool checkRpcReply(const char* context);
+
+    // Для асинхронной публикации
+    std::queue<std::tuple<std::string, std::string, std::string>> publish_queue_;
+    std::mutex queue_mutex_;
+    std::condition_variable queue_cv_;
+    std::thread publisher_thread_;
+    std::atomic<bool> running_{false};
 };
 

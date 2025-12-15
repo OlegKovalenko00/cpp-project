@@ -4,7 +4,6 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-#include <fstream>
 #include <ctime>
 
 namespace aggregation {
@@ -53,63 +52,35 @@ bool Database::initializeSchema() {
         return false;
     }
 
-    // Читаем SQL из файла init.sql
-    // Пробуем разные пути к файлу
-    const char* possiblePaths[] = {
-        "init.sql",
-        "../init.sql",
-        "../../init.sql",
-        "../aggregation-service/init.sql"
-    };
+    // Проверяем что схема уже создана PostgreSQL через init.sql
+    // Просто проверим наличие основных таблиц
+    const char* checkQuery =
+        "SELECT COUNT(*) FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name IN ("
+        "'agg_page_views', 'agg_clicks', 'agg_performance', "
+        "'agg_errors', 'agg_custom_events', 'aggregation_watermark')";
 
-    std::ifstream sqlFile;
-    std::string initSqlPath;
+    PGresult* res = PQexec(dbConnection_, checkQuery);
 
-    for (const char* path : possiblePaths) {
-        sqlFile.open(path);
-        if (sqlFile.is_open()) {
-            initSqlPath = path;
-            break;
-        }
-    }
-
-    if (!sqlFile.is_open()) {
-        std::cerr << "Failed to open init.sql file. Tried following paths:" << std::endl;
-        for (const char* path : possiblePaths) {
-            std::cerr << "  - " << path << std::endl;
-        }
+    if (res == nullptr || PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Failed to check database schema: " << PQerrorMessage(dbConnection_) << std::endl;
+        if (res) PQclear(res);
         return false;
     }
 
-    // Читаем весь файл
-    std::string sqlContent((std::istreambuf_iterator<char>(sqlFile)),
-                           std::istreambuf_iterator<char>());
-    sqlFile.close();
-
-    if (sqlContent.empty()) {
-        std::cerr << "init.sql file is empty" << std::endl;
-        return false;
+    int tableCount = 0;
+    if (PQntuples(res) > 0) {
+        tableCount = std::atoi(PQgetvalue(res, 0, 0));
     }
-
-    std::cout << "Executing SQL from " << initSqlPath << std::endl;
-
-    // Выполняем SQL из файла
-    PGresult* res = PQexec(dbConnection_, sqlContent.c_str());
-
-    if (res == nullptr) {
-        std::cerr << "Failed to execute init.sql: null result" << std::endl;
-        return false;
-    }
-
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        std::cerr << "Failed to initialize schema: " << PQerrorMessage(dbConnection_) << std::endl;
-        PQclear(res);
-        return false;
-    }
-
     PQclear(res);
 
-    std::cout << "Database schema initialized successfully (5 tables + watermark)" << std::endl;
+    if (tableCount != 6) {
+        std::cerr << "Database schema incomplete: found " << tableCount << " tables, expected 6" << std::endl;
+        std::cerr << "Make sure PostgreSQL initialized with init.sql (via docker-entrypoint-initdb.d)" << std::endl;
+        return false;
+    }
+
+    std::cout << "Database schema verified successfully (6 tables found)" << std::endl;
     return true;
 }
 

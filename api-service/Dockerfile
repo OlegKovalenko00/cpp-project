@@ -5,6 +5,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     cmake \
     git \
+    pkg-config \
+    protobuf-compiler \
+    protobuf-compiler-grpc \
+    libprotobuf-dev \
+    libgrpc++-dev \
     librabbitmq-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,6 +27,8 @@ FROM gcc:13-bookworm
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
+    libprotobuf-dev \
+    libgrpc++-dev \
     librabbitmq4 \
     && rm -rf /var/lib/apt/lists/*
 

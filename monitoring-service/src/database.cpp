@@ -39,6 +39,18 @@ void db_init() {
 
         conn = std::make_unique<pqxx::connection>(conninfo);
         std::cout << "Connected to PostgreSQL\n";
+
+        // Ensure logs table exists even if migrations didn't run (e.g. reused volume)
+        pqxx::work txn(*conn);
+        txn.exec(R"(
+            CREATE TABLE IF NOT EXISTS logs (
+                service_name VARCHAR(255) NOT NULL,
+                log_message  TEXT NOT NULL,
+                timestamp    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        )");
+        txn.commit();
+        std::cout << "Verified logs table\n";
     } catch (const std::exception& e) {
         std::cerr << "DB connection error: " << e.what() << std::endl;
     }

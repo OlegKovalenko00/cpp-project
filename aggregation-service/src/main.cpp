@@ -37,7 +37,7 @@ std::string BuildPostrgresConnectionString() {
                                    " port=" + port +
                                    " dbname=" + dbname +
                                    " user=" + user +
-                                   " password=" + password;//
+                                   " password=" + password;
     return connectionString;
 }
 
@@ -48,8 +48,8 @@ int main() {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    // Интервал агрегации в секундах (по умолчанию 60 секунд)
-    int aggregationIntervalSec = std::stoi(GetEnvVar("AGGREGATION_INTERVAL_SEC", "60"));
+    // Интервал агрегации в секундах (по умолчанию 1 секунд)
+    int aggregationIntervalSec = std::stoi(GetEnvVar("AGGREGATION_INTERVAL_SEC", "1"));
     std::cout << "Aggregation interval set to " << aggregationIntervalSec << " seconds" << std::endl;
 
     std::string connectionString = BuildPostrgresConnectionString();

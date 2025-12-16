@@ -32,13 +32,7 @@ RabbitMQConsumer::RabbitMQConsumer(const RabbitMQConfig& config) : config_(confi
 
 RabbitMQConsumer::~RabbitMQConsumer() {
     stop();
-    if (conn_) {
-        if (connected_) {
-            amqp_channel_close(conn_, 1, AMQP_REPLY_SUCCESS);
-            amqp_connection_close(conn_, AMQP_REPLY_SUCCESS);
-        }
-        amqp_destroy_connection(conn_);
-    }
+    disconnect();
 }
 
 bool RabbitMQConsumer::checkRpcReply(const char* context) {
@@ -50,8 +44,32 @@ bool RabbitMQConsumer::checkRpcReply(const char* context) {
     return true;
 }
 
+void RabbitMQConsumer::disconnect() {
+    connected_ = false;
+    if (conn_) {
+        amqp_channel_close(conn_, 1, AMQP_REPLY_SUCCESS);
+        amqp_connection_close(conn_, AMQP_REPLY_SUCCESS);
+        amqp_destroy_connection(conn_);
+    }
+    conn_ = nullptr;
+    socket_ = nullptr;
+}
+
+bool RabbitMQConsumer::reconnect() {
+    disconnect();
+    if (!connect()) {
+        return false;
+    }
+    if (callback_) {
+        subscribe(callback_);
+    }
+    return true;
+}
+
 bool RabbitMQConsumer::connect() {
     std::cout << "RabbitMQ connecting to: " << config_.host << ":" << config_.port << std::endl;
+
+    disconnect();
 
     conn_ = amqp_new_connection();
     if (!conn_) {
@@ -128,10 +146,18 @@ void RabbitMQConsumer::consumeLoop() {
     std::cout << "[RabbitMQ] Consumer loop started" << std::endl;
 
     while (running_) {
+        if (!connected_ || !conn_) {
+            if (!reconnect()) {
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                continue;
+            }
+            std::cout << "[RabbitMQ] Reconnected after disconnect" << std::endl;
+        }
+
         amqp_envelope_t envelope;
         amqp_maybe_release_buffers(conn_);
 
-        struct timeval timeout = {0, 10000}; // 100ms timeout
+        struct timeval timeout = {0, 100000}; // 100ms timeout
         amqp_rpc_reply_t reply = amqp_consume_message(conn_, &envelope, &timeout, 0);
 
         if (reply.reply_type == AMQP_RESPONSE_NORMAL) {
@@ -162,7 +188,12 @@ void RabbitMQConsumer::consumeLoop() {
             continue;
         } else if (reply.reply_type != AMQP_RESPONSE_NORMAL) {
             std::cerr << "[RabbitMQ] Consumer error, reconnecting..." << std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            if (!reconnect()) {
+                std::cerr << "[RabbitMQ] Reconnect failed, will retry..." << std::endl;
+                std::this_thread::sleep_for(std::chrono::seconds(3));
+            } else {
+                std::cout << "[RabbitMQ] Reconnected and re-subscribed" << std::endl;
+            }
         }
     }
 

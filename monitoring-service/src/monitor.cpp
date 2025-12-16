@@ -74,31 +74,6 @@ void run_monitoring_loop() {
                 }
             }
 
-            if (now - service.last_ready >= ready_interval) {
-                auto ready = check_ready(service.host, service.port);
-                auto ready_url = build_url(service.host, service.port, "/health/ready");
-                service.last_ready = now;
-
-                if (!ready.reachable) {
-                    log_warning(service.name + " readiness check failed");
-                    db_write_result(service.name, ready_url, false);
-                } else if (ready.status_code == 503) {
-                    log_warning(service.name + " not ready");
-                    db_write_result(service.name, ready_url, false);
-                } else if (ready.status_code == 200) {
-                    if (ready.db_connected) {
-                        log_info(service.name + " fully operational");
-                        db_write_result(service.name, ready_url, true);
-                    } else {
-                        log_warning(service.name + " dependency failure (DB disconnected)");
-                        db_write_result(service.name, ready_url, false);
-                    }
-                } else {
-                    log_warning(service.name + " readiness unexpected status=" +
-                                std::to_string(ready.status_code));
-                    db_write_result(service.name, ready_url, false);
-                }
-            }
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(1));

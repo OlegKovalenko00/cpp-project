@@ -1,17 +1,16 @@
 #include "handlers.h"
-#include "database.h"
-
+#include <httplib.h>
 #include <iostream>
 #include <chrono>
 #include <iomanip>
 #include <sstream>
 
-namespace aggregation {
+class HttpHandler::Impl {
+public:
+    httplib::Server server;
+};
 
-using json = nlohmann::json;
-
-// Вспомогательная функция для получения текущего времени в ISO 8601
-static std::string getCurrentTimestamp() {
+std::string HttpHandler::getCurrentTimestamp() {
     auto now = std::chrono::system_clock::now();
     auto time_t_now = std::chrono::system_clock::to_time_t(now);
     std::tm tm_now{};
@@ -22,54 +21,51 @@ static std::string getCurrentTimestamp() {
     return oss.str();
 }
 
-HttpHandlers::HttpHandlers(Database& db) : database_(db) {
-}
-
-// GET /health/ping
-void HttpHandlers::handleHealthPing(const httplib::Request& req, httplib::Response& res) {
-    HealthResponse response{
-        "ok",
-        "aggregation-service",
-        getCurrentTimestamp()
-    };
-
-    res.status = 200;
-    res.set_content(json(response).dump(), "application/json");
-
-    std::cout << "[HTTP] GET /health/ping -> 200 OK" << std::endl;
-}
-
-// GET /health/ready
-void HttpHandlers::handleHealthReady(const httplib::Request& req, httplib::Response& res) {
-    bool dbConnected = database_.isConnected();
-
-    ReadyResponse response{
-        dbConnected ? "ready" : "not_ready",
-        dbConnected,
-        getCurrentTimestamp()
-    };
-
-    res.status = dbConnected ? 200 : 503;
-    res.set_content(json(response).dump(), "application/json");
-
-    std::cout << "[HTTP] GET /health/ready -> " << res.status
-              << (dbConnected ? " (DB connected)" : " (DB disconnected)") << std::endl;
-}
-
-// Регистрация маршрутов
-void HttpHandlers::registerRoutes(httplib::Server& server) {
-    server.Get("/health/ping", [this](const httplib::Request& req, httplib::Response& res) {
-        handleHealthPing(req, res);
+HttpHandler::HttpHandler(int port)
+    : port_(port), impl_(std::make_unique<Impl>()) {
+    
+    impl_->server.Get("/health/ping", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string timestamp = getCurrentTimestamp();
+        std::string response = R"({"status":"ok","service":"metrics-service","timestamp":")" + timestamp + R"("})";
+        res.set_content(response, "application/json");
+        std::cout << "[HTTP] GET /health/ping -> 200 OK" << std::endl;
     });
 
-    server.Get("/health/ready", [this](const httplib::Request& req, httplib::Response& res) {
-        handleHealthReady(req, res);
+
+    impl_->server.Get("/health", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string timestamp = getCurrentTimestamp();
+        std::string response = R"({"status":"healthy","service":"metrics-service","timestamp":")" + timestamp + R"("})";
+        res.set_content(response, "application/json");
     });
 
-    std::cout << "[HTTP] Routes registered:" << std::endl;
-    std::cout << "  GET /health/ping  - liveness probe" << std::endl;
-    std::cout << "  GET /health/ready - readiness probe" << std::endl;
+    impl_->server.Get("/ping", [](const httplib::Request& req, httplib::Response& res) {
+        res.set_content("pong", "text/plain");
+    });
 }
 
-} // namespace aggregation
+HttpHandler::~HttpHandler() {
+    stop();
+}
 
+void HttpHandler::start() {
+    running_ = true;
+    server_thread_ = std::thread([this]() {
+        std::cout << "[HTTP] Server listening on port " << port_ << std::endl;
+        std::cout << "[HTTP] Routes registered:" << std::endl;
+        std::cout << "  GET /health/ping  - liveness probe" << std::endl;
+        std::cout << "  GET /health/ready - readiness probe" << std::endl;
+        std::cout << "  GET /health       - health check" << std::endl;
+        std::cout << "  GET /ping         - simple ping" << std::endl;
+        impl_->server.listen("0.0.0.0", port_);
+    });
+}
+
+void HttpHandler::stop() {
+    if (running_) {
+        running_ = false;
+        impl_->server.stop();
+        if (server_thread_.joinable()) {
+            server_thread_.join();
+        }
+    }
+}

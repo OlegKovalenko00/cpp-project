@@ -39,6 +39,8 @@ class RabbitMQConsumer {
 
   private:
     bool checkRpcReply(const char* context);
+    void disconnect();
+    bool reconnect();
     void consumeLoop();
 
     RabbitMQConfig config_;

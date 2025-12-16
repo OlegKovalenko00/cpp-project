@@ -1,65 +1,29 @@
-#ifndef HANDLERS_H
-#define HANDLERS_H
+#pragma once
 
-#include <httplib.h>
-#include <nlohmann/json.hpp>
 #include <string>
+#include <thread>
+#include <atomic>
+#include <memory>
+#include <functional>
 
-namespace aggregation {
-
-class Database;
-
-// ==================== HTTP Handlers ====================
-
-class HttpHandlers {
+class HttpHandler {
 public:
-    explicit HttpHandlers(Database& db);
+    using DatabaseCheckFunc = std::function<bool()>;
 
-    // GET /health/ping — проверка доступности сервиса
-    void handleHealthPing(const httplib::Request& req, httplib::Response& res);
+    HttpHandler(int port);
+    ~HttpHandler();
 
-    // GET /health/ready — проверка готовности (включая БД)
-    void handleHealthReady(const httplib::Request& req, httplib::Response& res);
-
-    // Регистрация маршрутов
-    void registerRoutes(httplib::Server& server);
+    void start();
+    void stop();
 
 private:
-    Database& database_;
+    int port_;
+    DatabaseCheckFunc db_check_;
+    std::atomic<bool> running_{false};
+    std::thread server_thread_;
+    
+    class Impl;
+    std::unique_ptr<Impl> impl_;
+    
+    std::string getCurrentTimestamp();
 };
-
-// ==================== Response Structures ====================
-
-struct HealthResponse {
-    std::string status;
-    std::string service;
-    std::string timestamp;
-};
-
-struct ReadyResponse {
-    std::string status;
-    bool database_connected;
-    std::string timestamp;
-};
-
-// JSON сериализация
-inline void to_json(nlohmann::json& j, const HealthResponse& r) {
-    j = nlohmann::json{
-        {"status", r.status},
-        {"service", r.service},
-        {"timestamp", r.timestamp}
-    };
-}
-
-inline void to_json(nlohmann::json& j, const ReadyResponse& r) {
-    j = nlohmann::json{
-        {"status", r.status},
-        {"database_connected", r.database_connected},
-        {"timestamp", r.timestamp}
-    };
-}
-
-} // namespace aggregation
-
-#endif // HANDLERS_H
-

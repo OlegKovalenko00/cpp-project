@@ -42,11 +42,16 @@ services:
         condition: service_healthy
     networks:
       - aggregation-network
+      - metrics-network
     restart: unless-stopped
 
 networks:
   aggregation-network:
     driver: bridge
+  metrics-network:
+    external:
+      name: metrics-service_metrics-network
+
 
 volumes:
   agg_pgdata:

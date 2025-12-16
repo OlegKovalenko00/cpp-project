@@ -37,7 +37,7 @@ std::string BuildPostrgresConnectionString() {
                                    " port=" + port +
                                    " dbname=" + dbname +
                                    " user=" + user +
-                                   " password=" + password;//
+                                   " password=" + password;
     return connectionString;
 }
 
@@ -48,8 +48,8 @@ int main() {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
-    // Интервал агрегации в секундах (по умолчанию 60 секунд)
-    int aggregationIntervalSec = std::stoi(GetEnvVar("AGGREGATION_INTERVAL_SEC", "60"));
+    // Интервал агрегации в секундах (по умолчанию 1 секунд)
+    int aggregationIntervalSec = std::stoi(GetEnvVar("AGGREGATION_INTERVAL_SEC", "1"));
     std::cout << "Aggregation interval set to " << aggregationIntervalSec << " seconds" << std::endl;
 
     std::string connectionString = BuildPostrgresConnectionString();
@@ -66,12 +66,10 @@ int main() {
     }
 
     // HTTP сервер для health checks
-    httplib::Server httpServer;
-    aggregation::HttpHandlers handlers(database);
-    handlers.registerRoutes(httpServer);
-
-    std::string httpHost = GetEnvVar("AGG_HTTP_HOST", "0.0.0.0");
-    int httpPort = std::stoi(GetEnvVar("AGG_HTTP_PORT", "8081"));
+    const char* http_port_env = std::getenv("AGG_HTTP_PORT");
+    int http_port = http_port_env ? std::stoi(http_port_env) : 8080;
+    HttpHandler http_handler(http_port);
+    http_handler.start();
 
     // gRPC подключение к metrics-service
     std::string metricsHost = GetEnvVar("METRICS_GRPC_HOST", "localhost");
@@ -101,12 +99,6 @@ int main() {
     std::thread grpcThread([&grpcServer]() {
         grpcServer.start();
         grpcServer.wait();
-    });
-
-    // Запускаем HTTP сервер в отдельном потоке
-    std::thread httpThread([&httpServer, &httpHost, httpPort]() {
-        std::cout << "HTTP server listening on " << httpHost << ":" << httpPort << std::endl;
-        httpServer.listen(httpHost, httpPort);
     });
 
     std::cout << "Starting periodic aggregation loop..." << std::endl;
@@ -150,11 +142,8 @@ int main() {
 
     // Останавливаем HTTP сервер
     std::cout << "Stopping HTTP server..." << std::endl;
-    httpServer.stop();
-    if (httpThread.joinable()) {
-        httpThread.join();
-    }
-
+    http_handler.stop();
+    
     std::cout << "Closing database connection..." << std::endl;
     database.disconnect();
 

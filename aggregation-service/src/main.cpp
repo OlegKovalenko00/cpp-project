@@ -9,6 +9,7 @@
 #include "database.h"
 #include "handlers.h"
 #include "metrics_client.h"
+#include "aggregation_server.h"
 
 static std::atomic<bool> running{true};
 
@@ -47,6 +48,10 @@ int main() {
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 
+    // Интервал агрегации в секундах (по умолчанию 60 секунд)
+    int aggregationIntervalSec = std::stoi(GetEnvVar("AGGREGATION_INTERVAL_SEC", "60"));
+    std::cout << "Aggregation interval set to " << aggregationIntervalSec << " seconds" << std::endl;
+
     std::string connectionString = BuildPostrgresConnectionString();
 
     aggregation::Database database;
@@ -83,32 +88,76 @@ int main() {
         std::cout << "MetricsClient: gRPC channel is not ready yet (will connect on first request)" << std::endl;
     }
 
+    // Создаем агрегатор
+    aggregation::Aggregator aggregator(database, metricsClient);
+
+    // Запускаем gRPC сервер для предоставления агрегированных данных
+    std::string grpcHost = GetEnvVar("AGG_GRPC_HOST", "0.0.0.0");
+    std::string grpcPort = GetEnvVar("AGG_GRPC_PORT", "50052");
+    std::string grpcAddress = grpcHost + ":" + grpcPort;
+
+    aggregation::AggregationGrpcServer grpcServer(database, grpcAddress);
+
+    std::thread grpcThread([&grpcServer]() {
+        grpcServer.start();
+        grpcServer.wait();
+    });
+
     // Запускаем HTTP сервер в отдельном потоке
     std::thread httpThread([&httpServer, &httpHost, httpPort]() {
         std::cout << "HTTP server listening on " << httpHost << ":" << httpPort << std::endl;
         httpServer.listen(httpHost, httpPort);
     });
 
-    // Запускаем агрегацию
-    aggregation::Aggregator aggregator(database, metricsClient);
-    aggregator.run();
+    std::cout << "Starting periodic aggregation loop..." << std::endl;
 
-    // Ожидаем завершения (для демонстрации выполняем один раз)
-    // В реальном сценарии здесь был бы цикл агрегации
+    // Периодический цикл агрегации
+    auto lastAggregationTime = std::chrono::steady_clock::now();
 
-    std::cout << "Aggregation completed. HTTP server running. Press Ctrl+C to stop." << std::endl;
-
-    // Ожидаем сигнала завершения
     while (running) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastAggregationTime);
+
+        if (elapsed.count() >= aggregationIntervalSec) {
+            std::cout << "\n=== Starting aggregation cycle ===" << std::endl;
+
+            try {
+                aggregator.run();
+                std::cout << "=== Aggregation cycle completed successfully ===" << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "ERROR: Aggregation cycle failed: " << e.what() << std::endl;
+                std::cerr << "Will retry on next cycle..." << std::endl;
+            } catch (...) {
+                std::cerr << "ERROR: Aggregation cycle failed with unknown error" << std::endl;
+                std::cerr << "Will retry on next cycle..." << std::endl;
+            }
+
+            lastAggregationTime = now;
+        }
+
+        // Короткий сон для проверки сигналов
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    std::cout << "\nShutting down gracefully..." << std::endl;
+
+    // Останавливаем gRPC сервер
+    std::cout << "Stopping gRPC server..." << std::endl;
+    grpcServer.stop();
+    if (grpcThread.joinable()) {
+        grpcThread.join();
     }
 
     // Останавливаем HTTP сервер
+    std::cout << "Stopping HTTP server..." << std::endl;
     httpServer.stop();
     if (httpThread.joinable()) {
         httpThread.join();
     }
 
-    std::cout << "Aggregation Service stopped" << std::endl;
+    std::cout << "Closing database connection..." << std::endl;
+    database.disconnect();
+
+    std::cout << "Aggregation Service stopped successfully" << std::endl;
     return 0;
 }

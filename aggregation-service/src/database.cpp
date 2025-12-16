@@ -52,144 +52,35 @@ bool Database::initializeSchema() {
         return false;
     }
 
-    // Таблица для агрегации page_view событий
-    const char* pageViewsTable =
-        "CREATE TABLE IF NOT EXISTS agg_page_views ("
-        "    id SERIAL PRIMARY KEY,"
-        "    time_bucket TIMESTAMPTZ NOT NULL,"
-        "    project_id TEXT NOT NULL,"
-        "    page TEXT NOT NULL,"
-        "    views_count BIGINT NOT NULL DEFAULT 0,"
-        "    unique_users BIGINT DEFAULT 0,"
-        "    unique_sessions BIGINT DEFAULT 0,"
-        "    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
-        "    UNIQUE(time_bucket, project_id, page)"
-        ");"
-        "CREATE INDEX IF NOT EXISTS idx_agg_page_views_time "
-        "    ON agg_page_views(time_bucket);"
-        "CREATE INDEX IF NOT EXISTS idx_agg_page_views_project "
-        "    ON agg_page_views(project_id, page);";
+    // Проверяем что схема уже создана PostgreSQL через init.sql
+    // Просто проверим наличие основных таблиц
+    const char* checkQuery =
+        "SELECT COUNT(*) FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name IN ("
+        "'agg_page_views', 'agg_clicks', 'agg_performance', "
+        "'agg_errors', 'agg_custom_events', 'aggregation_watermark')";
 
-    // Таблица для агрегации click событий
-    const char* clicksTable =
-        "CREATE TABLE IF NOT EXISTS agg_clicks ("
-        "    id SERIAL PRIMARY KEY,"
-        "    time_bucket TIMESTAMPTZ NOT NULL,"
-        "    project_id TEXT NOT NULL,"
-        "    page TEXT NOT NULL,"
-        "    element_id TEXT,"
-        "    clicks_count BIGINT NOT NULL DEFAULT 0,"
-        "    unique_users BIGINT DEFAULT 0,"
-        "    unique_sessions BIGINT DEFAULT 0,"
-        "    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
-        "    UNIQUE(time_bucket, project_id, page, element_id)"
-        ");"
-        "CREATE INDEX IF NOT EXISTS idx_agg_clicks_time "
-        "    ON agg_clicks(time_bucket);"
-        "CREATE INDEX IF NOT EXISTS idx_agg_clicks_project "
-        "    ON agg_clicks(project_id, page);";
+    PGresult* res = PQexec(dbConnection_, checkQuery);
 
-    // Таблица для агрегации performance метрик
-    const char* performanceTable =
-        "CREATE TABLE IF NOT EXISTS agg_performance ("
-        "    id SERIAL PRIMARY KEY,"
-        "    time_bucket TIMESTAMPTZ NOT NULL,"
-        "    project_id TEXT NOT NULL,"
-        "    page TEXT NOT NULL,"
-        "    samples_count BIGINT NOT NULL DEFAULT 0,"
-        "    avg_total_load_ms DOUBLE PRECISION,"
-        "    p95_total_load_ms DOUBLE PRECISION,"
-        "    avg_ttfb_ms DOUBLE PRECISION,"
-        "    p95_ttfb_ms DOUBLE PRECISION,"
-        "    avg_fcp_ms DOUBLE PRECISION,"
-        "    p95_fcp_ms DOUBLE PRECISION,"
-        "    avg_lcp_ms DOUBLE PRECISION,"
-        "    p95_lcp_ms DOUBLE PRECISION,"
-        "    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
-        "    UNIQUE(time_bucket, project_id, page)"
-        ");"
-        "CREATE INDEX IF NOT EXISTS idx_agg_performance_time "
-        "    ON agg_performance(time_bucket);"
-        "CREATE INDEX IF NOT EXISTS idx_agg_performance_project "
-        "    ON agg_performance(project_id, page);";
-
-    // Таблица для агрегации error событий
-    const char* errorsTable =
-        "CREATE TABLE IF NOT EXISTS agg_errors ("
-        "    id SERIAL PRIMARY KEY,"
-        "    time_bucket TIMESTAMPTZ NOT NULL,"
-        "    project_id TEXT NOT NULL,"
-        "    page TEXT NOT NULL,"
-        "    error_type TEXT,"
-        "    errors_count BIGINT NOT NULL DEFAULT 0,"
-        "    warning_count BIGINT DEFAULT 0,"
-        "    critical_count BIGINT DEFAULT 0,"
-        "    unique_users BIGINT DEFAULT 0,"
-        "    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
-        "    UNIQUE(time_bucket, project_id, page, error_type)"
-        ");"
-        "CREATE INDEX IF NOT EXISTS idx_agg_errors_time "
-        "    ON agg_errors(time_bucket);"
-        "CREATE INDEX IF NOT EXISTS idx_agg_errors_project "
-        "    ON agg_errors(project_id, page);";
-
-    // Таблица для агрегации custom событий
-    const char* customEventsTable =
-        "CREATE TABLE IF NOT EXISTS agg_custom_events ("
-        "    id SERIAL PRIMARY KEY,"
-        "    time_bucket TIMESTAMPTZ NOT NULL,"
-        "    project_id TEXT NOT NULL,"
-        "    event_name TEXT NOT NULL,"
-        "    page TEXT,"
-        "    events_count BIGINT NOT NULL DEFAULT 0,"
-        "    unique_users BIGINT DEFAULT 0,"
-        "    unique_sessions BIGINT DEFAULT 0,"
-        "    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
-        "    UNIQUE(time_bucket, project_id, event_name, page)"
-        ");"
-        "CREATE INDEX IF NOT EXISTS idx_agg_custom_events_time "
-        "    ON agg_custom_events(time_bucket);"
-        "CREATE INDEX IF NOT EXISTS idx_agg_custom_events_project "
-        "    ON agg_custom_events(project_id, event_name);";
-
-    // Таблица watermark для отслеживания прогресса агрегации
-    const char* watermarkTable =
-        "CREATE TABLE IF NOT EXISTS aggregation_watermark ("
-        "    id INTEGER PRIMARY KEY,"
-        "    last_aggregated_at TIMESTAMPTZ NOT NULL"
-        ");"
-        "INSERT INTO aggregation_watermark (id, last_aggregated_at) "
-        "VALUES (1, '1970-01-01T00:00:00Z') "
-        "ON CONFLICT (id) DO NOTHING;";
-
-    // Выполняем все запросы
-    const char* queries[] = {
-        pageViewsTable,
-        clicksTable,
-        performanceTable,
-        errorsTable,
-        customEventsTable,
-        watermarkTable
-    };
-
-    for (const char* sql : queries) {
-        PGresult* res = PQexec(dbConnection_, sql);
-
-        if (res == nullptr) {
-            std::cerr << "Failed to execute schema query: null result" << std::endl;
-            return false;
-        }
-
-        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            std::cerr << "Failed to initialize schema: " << PQerrorMessage(dbConnection_) << std::endl;
-            PQclear(res);
-            return false;
-        }
-
-        PQclear(res);
+    if (res == nullptr || PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Failed to check database schema: " << PQerrorMessage(dbConnection_) << std::endl;
+        if (res) PQclear(res);
+        return false;
     }
 
-    std::cout << "Database schema initialized successfully (5 tables + watermark)" << std::endl;
+    int tableCount = 0;
+    if (PQntuples(res) > 0) {
+        tableCount = std::atoi(PQgetvalue(res, 0, 0));
+    }
+    PQclear(res);
+
+    if (tableCount != 6) {
+        std::cerr << "Database schema incomplete: found " << tableCount << " tables, expected 6" << std::endl;
+        std::cerr << "Make sure PostgreSQL initialized with init.sql (via docker-entrypoint-initdb.d)" << std::endl;
+        return false;
+    }
+
+    std::cout << "Database schema verified successfully (6 tables found)" << std::endl;
     return true;
 }
 
@@ -443,4 +334,259 @@ bool Database::writeAggregationResult(const AggregationResult& result) {
     return success;
 }
 
+// ===== Методы чтения для gRPC сервера =====
+
+std::vector<AggregatedPageViews> Database::readPageViews(
+    const std::string& projectId,
+    std::chrono::system_clock::time_point from,
+    std::chrono::system_clock::time_point to,
+    const std::string& pageFilter,
+    int limit,
+    int offset
+) {
+    std::vector<AggregatedPageViews> result;
+
+    std::ostringstream sql;
+    sql << "SELECT time_bucket, project_id, page, views_count, unique_users, unique_sessions "
+        << "FROM agg_page_views WHERE project_id = '" << escapeString(projectId) << "' "
+        << "AND time_bucket >= '" << formatTimestamp(from) << "' "
+        << "AND time_bucket < '" << formatTimestamp(to) << "' ";
+
+    if (!pageFilter.empty()) {
+        sql << "AND page = '" << escapeString(pageFilter) << "' ";
+    }
+
+    sql << "ORDER BY time_bucket DESC LIMIT " << limit << " OFFSET " << offset;
+
+    PGresult* res = PQexec(dbConnection_, sql.str().c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Read page views failed: " << PQerrorMessage(dbConnection_) << std::endl;
+        PQclear(res);
+        return result;
+    }
+
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; ++i) {
+        AggregatedPageViews agg;
+        agg.timeBucket = parseTimestamp(PQgetvalue(res, i, 0));
+        agg.projectId = PQgetvalue(res, i, 1);
+        agg.page = PQgetvalue(res, i, 2);
+        agg.viewsCount = std::stoll(PQgetvalue(res, i, 3));
+        agg.uniqueUsers = std::stoll(PQgetvalue(res, i, 4));
+        agg.uniqueSessions = std::stoll(PQgetvalue(res, i, 5));
+        result.push_back(agg);
+    }
+
+    PQclear(res);
+    return result;
+}
+
+std::vector<AggregatedClicks> Database::readClicks(
+    const std::string& projectId,
+    std::chrono::system_clock::time_point from,
+    std::chrono::system_clock::time_point to,
+    const std::string& pageFilter,
+    const std::string& elementIdFilter,
+    int limit,
+    int offset
+) {
+    std::vector<AggregatedClicks> result;
+
+    std::ostringstream sql;
+    sql << "SELECT time_bucket, project_id, page, element_id, clicks_count, unique_users, unique_sessions "
+        << "FROM agg_clicks WHERE project_id = '" << escapeString(projectId) << "' "
+        << "AND time_bucket >= '" << formatTimestamp(from) << "' "
+        << "AND time_bucket < '" << formatTimestamp(to) << "' ";
+
+    if (!pageFilter.empty()) {
+        sql << "AND page = '" << escapeString(pageFilter) << "' ";
+    }
+    if (!elementIdFilter.empty()) {
+        sql << "AND element_id = '" << escapeString(elementIdFilter) << "' ";
+    }
+
+    sql << "ORDER BY time_bucket DESC LIMIT " << limit << " OFFSET " << offset;
+
+    PGresult* res = PQexec(dbConnection_, sql.str().c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Read clicks failed: " << PQerrorMessage(dbConnection_) << std::endl;
+        PQclear(res);
+        return result;
+    }
+
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; ++i) {
+        AggregatedClicks agg;
+        agg.timeBucket = parseTimestamp(PQgetvalue(res, i, 0));
+        agg.projectId = PQgetvalue(res, i, 1);
+        agg.page = PQgetvalue(res, i, 2);
+        agg.elementId = PQgetvalue(res, i, 3);
+        agg.clicksCount = std::stoll(PQgetvalue(res, i, 4));
+        agg.uniqueUsers = std::stoll(PQgetvalue(res, i, 5));
+        agg.uniqueSessions = std::stoll(PQgetvalue(res, i, 6));
+        result.push_back(agg);
+    }
+
+    PQclear(res);
+    return result;
+}
+
+std::vector<AggregatedPerformance> Database::readPerformance(
+    const std::string& projectId,
+    std::chrono::system_clock::time_point from,
+    std::chrono::system_clock::time_point to,
+    const std::string& pageFilter,
+    int limit,
+    int offset
+) {
+    std::vector<AggregatedPerformance> result;
+
+    std::ostringstream sql;
+    sql << "SELECT time_bucket, project_id, page, samples_count, "
+        << "avg_total_load_ms, p95_total_load_ms, avg_ttfb_ms, p95_ttfb_ms, "
+        << "avg_fcp_ms, p95_fcp_ms, avg_lcp_ms, p95_lcp_ms "
+        << "FROM agg_performance WHERE project_id = '" << escapeString(projectId) << "' "
+        << "AND time_bucket >= '" << formatTimestamp(from) << "' "
+        << "AND time_bucket < '" << formatTimestamp(to) << "' ";
+
+    if (!pageFilter.empty()) {
+        sql << "AND page = '" << escapeString(pageFilter) << "' ";
+    }
+
+    sql << "ORDER BY time_bucket DESC LIMIT " << limit << " OFFSET " << offset;
+
+    PGresult* res = PQexec(dbConnection_, sql.str().c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Read performance failed: " << PQerrorMessage(dbConnection_) << std::endl;
+        PQclear(res);
+        return result;
+    }
+
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; ++i) {
+        AggregatedPerformance agg;
+        agg.timeBucket = parseTimestamp(PQgetvalue(res, i, 0));
+        agg.projectId = PQgetvalue(res, i, 1);
+        agg.page = PQgetvalue(res, i, 2);
+        agg.samplesCount = std::stoll(PQgetvalue(res, i, 3));
+        agg.avgTotalLoadMs = std::stod(PQgetvalue(res, i, 4));
+        agg.p95TotalLoadMs = std::stod(PQgetvalue(res, i, 5));
+        agg.avgTtfbMs = std::stod(PQgetvalue(res, i, 6));
+        agg.p95TtfbMs = std::stod(PQgetvalue(res, i, 7));
+        agg.avgFcpMs = std::stod(PQgetvalue(res, i, 8));
+        agg.p95FcpMs = std::stod(PQgetvalue(res, i, 9));
+        agg.avgLcpMs = std::stod(PQgetvalue(res, i, 10));
+        agg.p95LcpMs = std::stod(PQgetvalue(res, i, 11));
+        result.push_back(agg);
+    }
+
+    PQclear(res);
+    return result;
+}
+
+std::vector<AggregatedErrors> Database::readErrors(
+    const std::string& projectId,
+    std::chrono::system_clock::time_point from,
+    std::chrono::system_clock::time_point to,
+    const std::string& pageFilter,
+    const std::string& errorTypeFilter,
+    int limit,
+    int offset
+) {
+    std::vector<AggregatedErrors> result;
+
+    std::ostringstream sql;
+    sql << "SELECT time_bucket, project_id, page, error_type, errors_count, "
+        << "warning_count, critical_count, unique_users "
+        << "FROM agg_errors WHERE project_id = '" << escapeString(projectId) << "' "
+        << "AND time_bucket >= '" << formatTimestamp(from) << "' "
+        << "AND time_bucket < '" << formatTimestamp(to) << "' ";
+
+    if (!pageFilter.empty()) {
+        sql << "AND page = '" << escapeString(pageFilter) << "' ";
+    }
+    if (!errorTypeFilter.empty()) {
+        sql << "AND error_type = '" << escapeString(errorTypeFilter) << "' ";
+    }
+
+    sql << "ORDER BY time_bucket DESC LIMIT " << limit << " OFFSET " << offset;
+
+    PGresult* res = PQexec(dbConnection_, sql.str().c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Read errors failed: " << PQerrorMessage(dbConnection_) << std::endl;
+        PQclear(res);
+        return result;
+    }
+
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; ++i) {
+        AggregatedErrors agg;
+        agg.timeBucket = parseTimestamp(PQgetvalue(res, i, 0));
+        agg.projectId = PQgetvalue(res, i, 1);
+        agg.page = PQgetvalue(res, i, 2);
+        agg.errorType = PQgetvalue(res, i, 3);
+        agg.errorsCount = std::stoll(PQgetvalue(res, i, 4));
+        agg.warningCount = std::stoll(PQgetvalue(res, i, 5));
+        agg.criticalCount = std::stoll(PQgetvalue(res, i, 6));
+        agg.uniqueUsers = std::stoll(PQgetvalue(res, i, 7));
+        result.push_back(agg);
+    }
+
+    PQclear(res);
+    return result;
+}
+
+std::vector<AggregatedCustomEvents> Database::readCustomEvents(
+    const std::string& projectId,
+    std::chrono::system_clock::time_point from,
+    std::chrono::system_clock::time_point to,
+    const std::string& eventNameFilter,
+    const std::string& pageFilter,
+    int limit,
+    int offset
+) {
+    std::vector<AggregatedCustomEvents> result;
+
+    std::ostringstream sql;
+    sql << "SELECT time_bucket, project_id, event_name, page, events_count, "
+        << "unique_users, unique_sessions "
+        << "FROM agg_custom_events WHERE project_id = '" << escapeString(projectId) << "' "
+        << "AND time_bucket >= '" << formatTimestamp(from) << "' "
+        << "AND time_bucket < '" << formatTimestamp(to) << "' ";
+
+    if (!eventNameFilter.empty()) {
+        sql << "AND event_name = '" << escapeString(eventNameFilter) << "' ";
+    }
+    if (!pageFilter.empty()) {
+        sql << "AND page = '" << escapeString(pageFilter) << "' ";
+    }
+
+    sql << "ORDER BY time_bucket DESC LIMIT " << limit << " OFFSET " << offset;
+
+    PGresult* res = PQexec(dbConnection_, sql.str().c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Read custom events failed: " << PQerrorMessage(dbConnection_) << std::endl;
+        PQclear(res);
+        return result;
+    }
+
+    int rows = PQntuples(res);
+    for (int i = 0; i < rows; ++i) {
+        AggregatedCustomEvents agg;
+        agg.timeBucket = parseTimestamp(PQgetvalue(res, i, 0));
+        agg.projectId = PQgetvalue(res, i, 1);
+        agg.eventName = PQgetvalue(res, i, 2);
+        agg.page = PQgetvalue(res, i, 3);
+        agg.eventsCount = std::stoll(PQgetvalue(res, i, 4));
+        agg.uniqueUsers = std::stoll(PQgetvalue(res, i, 5));
+        agg.uniqueSessions = std::stoll(PQgetvalue(res, i, 6));
+        result.push_back(agg);
+    }
+
+    PQclear(res);
+    return result;
+}
+
 } // namespace aggregation
+
+

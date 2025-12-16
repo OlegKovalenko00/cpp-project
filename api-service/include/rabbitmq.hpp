@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <mutex>
 #include <amqp.h>
 #include <amqp_tcp_socket.h>
 
@@ -15,6 +16,8 @@ public:
     bool isConnected() const { return connected_; }
 
 private:
+    // rabbitmq-c connection is not thread-safe, guard socket writes
+    std::mutex mutex_;
     std::string host_;
     int port_;
     std::string username_;
@@ -27,4 +30,3 @@ private:
     
     bool checkRpcReply(const char* context);
 };
-

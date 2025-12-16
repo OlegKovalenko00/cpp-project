@@ -1,5 +1,6 @@
 #include "monitor.h"
 
+#include "database.h"
 #include "http_client.h"
 #include "logging.h"
 
@@ -8,6 +9,7 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <string>
 
 struct Service {
     std::string name;
@@ -25,6 +27,10 @@ static std::string get_env(const char* name, const std::string& default_value) {
 static int get_env_int(const char* name, int default_value) {
     const char* val = std::getenv(name);
     return val ? std::stoi(val) : default_value;
+}
+
+static std::string build_url(const std::string& host, int port, const std::string& path) {
+    return "http://" + host + ":" + std::to_string(port) + path;
 }
 
 void run_monitoring_loop() {
@@ -51,36 +57,46 @@ void run_monitoring_loop() {
         for (auto& service : services) {
             if (now - service.last_ping >= ping_interval) {
                 auto ping = check_ping(service.host, service.port);
+                auto ping_url = build_url(service.host, service.port, "/health/ping");
                 service.last_ping = now;
 
                 if (!ping.reachable) {
                     log_error(service.name + " unreachable (liveness failed)");
+                    db_write_result(service.name, ping_url, false);
                 } else if (ping.status_code == 200) {
                     log_info(service.name + " IS ALIVE");
                     log_debug(service.name + " HEARTBEAT OK");
+                    db_write_result(service.name, ping_url, true);
                 } else {
                     log_error(service.name +
                               " liveness failed, status=" + std::to_string(ping.status_code));
+                    db_write_result(service.name, ping_url, false);
                 }
             }
 
             if (now - service.last_ready >= ready_interval) {
                 auto ready = check_ready(service.host, service.port);
+                auto ready_url = build_url(service.host, service.port, "/health/ready");
                 service.last_ready = now;
 
                 if (!ready.reachable) {
                     log_warning(service.name + " readiness check failed");
+                    db_write_result(service.name, ready_url, false);
                 } else if (ready.status_code == 503) {
                     log_warning(service.name + " not ready");
+                    db_write_result(service.name, ready_url, false);
                 } else if (ready.status_code == 200) {
                     if (ready.db_connected) {
                         log_info(service.name + " fully operational");
+                        db_write_result(service.name, ready_url, true);
                     } else {
                         log_warning(service.name + " dependency failure (DB disconnected)");
+                        db_write_result(service.name, ready_url, false);
                     }
                 } else {
                     log_warning(service.name + " readiness unexpected status=" +
                                 std::to_string(ready.status_code));
+                    db_write_result(service.name, ready_url, false);
                 }
             }
         }

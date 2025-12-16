@@ -37,7 +37,7 @@ std::string BuildPostrgresConnectionString() {
                                    " port=" + port +
                                    " dbname=" + dbname +
                                    " user=" + user +
-                                   " password=" + password;
+                                   " password=" + password;//
     return connectionString;
 }
 

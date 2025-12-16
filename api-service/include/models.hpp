@@ -54,6 +54,36 @@ struct ErrorResponse {
 void to_json(nlohmann::json& j, const ErrorResponse& e);
 void from_json(const nlohmann::json& j, ErrorResponse& e);
 
+// ==================== Monitoring ====================
+
+struct UptimePeriodStat {
+    int64_t ok = 0;
+    int64_t total = 0;
+    double percent = 0.0;
+};
+
+void to_json(nlohmann::json& j, const UptimePeriodStat& s);
+void from_json(const nlohmann::json& j, UptimePeriodStat& s);
+
+struct UptimePeriods {
+    std::optional<UptimePeriodStat> day;
+    std::optional<UptimePeriodStat> week;
+    std::optional<UptimePeriodStat> month;
+    std::optional<UptimePeriodStat> year;
+};
+
+void to_json(nlohmann::json& j, const UptimePeriods& p);
+void from_json(const nlohmann::json& j, UptimePeriods& p);
+
+struct UptimeResponse {
+    std::string service;
+    std::string period;
+    UptimePeriods periods;
+};
+
+void to_json(nlohmann::json& j, const UptimeResponse& r);
+void from_json(const nlohmann::json& j, UptimeResponse& r);
+
 // PageViewEvent
 struct PageViewEvent {
     std::string page;

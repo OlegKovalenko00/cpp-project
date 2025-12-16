@@ -10,6 +10,8 @@ servers:
 paths:
   /health/ping:
     get:
+      tags:
+        - Health
       summary: Health check endpoint
       description: Returns service health status
       operationId: healthPing
@@ -35,6 +37,8 @@ paths:
 
   /page-views:
     post:
+      tags:
+        - Events
       summary: Send page view event
       operationId: createPageView
       requestBody:
@@ -67,6 +71,8 @@ paths:
 
   /clicks:
     post:
+      tags:
+        - Events
       summary: Send click/UI event
       operationId: createClick
       requestBody:
@@ -100,6 +106,8 @@ paths:
 
   /performance:
     post:
+      tags:
+        - Events
       summary: Send frontend performance metrics
       operationId: createPerformance
       requestBody:
@@ -135,6 +143,8 @@ paths:
 
   /errors:
     post:
+      tags:
+        - Events
       summary: Send frontend error event
       operationId: createErrorEvent
       requestBody:
@@ -170,6 +180,8 @@ paths:
 
   /custom-events:
     post:
+      tags:
+        - Events
       summary: Send custom application event
       operationId: createCustomEvent
       requestBody:
@@ -204,8 +216,179 @@ paths:
                   field: "name"
                   reason: "required"
 
+  /uptime:
+    get:
+      tags:
+        - Monitoring
+      summary: Get uptime stats for a service
+      description: Returns uptime percentages for day/week/month/year or a specific period.
+      operationId: getUptime
+      parameters:
+        - in: query
+          name: service
+          required: true
+          schema:
+            type: string
+          description: Service name to query (e.g. api-service)
+        - in: query
+          name: period
+          required: false
+          schema:
+            type: string
+            enum: [day, week, month, year]
+          description: Optional period filter; when omitted returns all periods.
+      responses:
+        '200':
+          description: Uptime statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UptimeResponse'
+        '400':
+          description: Missing service or invalid period
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Failed to read stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  details:
+                    type: string
+
+  /uptime/day:
+    get:
+      tags:
+        - Monitoring
+      summary: Get day uptime stats for a service
+      operationId: getUptimeDay
+      parameters:
+        - in: query
+          name: service
+          required: true
+          schema:
+            type: string
+          description: Service name to query
+      responses:
+        '200':
+          description: Day uptime statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UptimeResponse'
+        '400':
+          description: Missing service
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /uptime/week:
+    get:
+      tags:
+        - Monitoring
+      summary: Get week uptime stats for a service
+      operationId: getUptimeWeek
+      parameters:
+        - in: query
+          name: service
+          required: true
+          schema:
+            type: string
+          description: Service name to query
+      responses:
+        '200':
+          description: Week uptime statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UptimeResponse'
+        '400':
+          description: Missing service
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /uptime/month:
+    get:
+      tags:
+        - Monitoring
+      summary: Get month uptime stats for a service
+      operationId: getUptimeMonth
+      parameters:
+        - in: query
+          name: service
+          required: true
+          schema:
+            type: string
+          description: Service name to query
+      responses:
+        '200':
+          description: Month uptime statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UptimeResponse'
+        '400':
+          description: Missing service
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /uptime/year:
+    get:
+      tags:
+        - Monitoring
+      summary: Get year uptime stats for a service
+      operationId: getUptimeYear
+      parameters:
+        - in: query
+          name: service
+          required: true
+          schema:
+            type: string
+          description: Service name to query
+      responses:
+        '200':
+          description: Year uptime statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UptimeResponse'
+        '400':
+          description: Missing service
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
   /aggregation/watermark:
     get:
+      tags:
+        - Aggregation
       summary: Get aggregation watermark
       operationId: getAggregationWatermark
       responses:
@@ -229,6 +412,8 @@ paths:
 
   /aggregation/page-views:
     post:
+      tags:
+        - Aggregation
       summary: Get aggregated page view metrics
       operationId: getPageViewsAggregation
       requestBody:
@@ -283,6 +468,8 @@ paths:
 
   /aggregation/clicks:
     post:
+      tags:
+        - Aggregation
       summary: Get aggregated click metrics
       operationId: getClicksAggregation
       requestBody:
@@ -339,6 +526,8 @@ paths:
 
   /aggregation/performance:
     post:
+      tags:
+        - Aggregation
       summary: Get aggregated performance metrics
       operationId: getPerformanceAggregation
       requestBody:
@@ -399,6 +588,8 @@ paths:
 
   /aggregation/errors:
     post:
+      tags:
+        - Aggregation
       summary: Get aggregated error metrics
       operationId: getErrorsAggregation
       requestBody:
@@ -456,6 +647,8 @@ paths:
 
   /aggregation/custom-events:
     post:
+      tags:
+        - Aggregation
       summary: Get aggregated custom event metrics
       operationId: getCustomEventsAggregation
       requestBody:
@@ -552,6 +745,53 @@ components:
           example:
             field: "page"
             reason: "required"
+
+    UptimePeriodStat:
+      type: object
+      required: [ok, total, percent]
+      properties:
+        ok:
+          type: integer
+          format: int64
+          description: Successful checks
+          example: 95
+        total:
+          type: integer
+          format: int64
+          description: Total checks
+          example: 100
+        percent:
+          type: number
+          format: double
+          description: Uptime percentage for the period
+          example: 95.0
+
+    UptimePeriods:
+      type: object
+      properties:
+        day:
+          $ref: '#/components/schemas/UptimePeriodStat'
+        week:
+          $ref: '#/components/schemas/UptimePeriodStat'
+        month:
+          $ref: '#/components/schemas/UptimePeriodStat'
+        year:
+          $ref: '#/components/schemas/UptimePeriodStat'
+
+    UptimeResponse:
+      type: object
+      required: [service, period, periods]
+      properties:
+        service:
+          type: string
+          description: Service name
+          example: "metrics-service"
+        period:
+          type: string
+          description: Requested period or "all" when not filtered
+          example: "day"
+        periods:
+          $ref: '#/components/schemas/UptimePeriods'
             
     PageViewEvent:
       type: object

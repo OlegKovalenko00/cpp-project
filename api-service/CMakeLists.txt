@@ -1,45 +1,80 @@
-cmake_minimum_required(VERSION 3.14)
-project(api-service)
+cmake_minimum_required(VERSION 3.15)
+project(api-service LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include_directories(include)
 include(FetchContent)
 
-FetchContent_Declare(
-    httplib
-    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-    GIT_TAG        v0.18.3
-    GIT_SHALLOW    TRUE
-)
+find_package(Threads REQUIRED)
+find_package(Protobuf REQUIRED)
+find_package(PkgConfig REQUIRED)
 
+pkg_check_modules(GRPC REQUIRED grpc++ grpc)
+pkg_check_modules(RABBITMQ REQUIRED librabbitmq)
+
+set(FETCHCONTENT_QUIET OFF)
+FetchContent_Declare(
+    libpqxx
+    GIT_REPOSITORY https://github.com/jtv/libpqxx.git
+    GIT_TAG 7.9.2
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+)
+FetchContent_Declare(
+    cpp_httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.15.3
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+)
 FetchContent_Declare(
     json
     URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    GIT_SHALLOW    TRUE
 )
+set(PQXX_BUILD_TEST OFF CACHE BOOL "" FORCE)
+set(PQXX_BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(SKIP_BUILD_TEST ON CACHE BOOL "" FORCE)
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(libpqxx cpp_httplib json)
 
-# rabbitmq-c - синхронный C клиент для RabbitMQ
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
-set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(ENABLE_SSL_SUPPORT OFF CACHE BOOL "" FORCE)
-
-FetchContent_Declare(
-    rabbitmq-c
-    GIT_REPOSITORY https://github.com/alanxz/rabbitmq-c.git
-    GIT_TAG        v0.14.0
-    GIT_SHALLOW    TRUE
-)
-
-FetchContent_MakeAvailable(httplib json rabbitmq-c)
-
+# Исходные файлы api-service
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
-add_executable(api-service ${SOURCES})
-target_include_directories(api-service PRIVATE ${rabbitmq-c_SOURCE_DIR}/include)
-target_link_libraries(api-service PRIVATE httplib::httplib nlohmann_json::nlohmann_json rabbitmq-static)
+# Добавляем уже сгенерированные protobuf файлы из src/
+set(PROTO_SOURCES
+    src/aggregation.pb.cc
+    src/aggregation.grpc.pb.cc
+)
+
+add_executable(api-service
+    ${SOURCES}
+    ${PROTO_SOURCES}
+)
+
+set_target_properties(api-service PROPERTIES OUTPUT_NAME "api-service")
+
+target_include_directories(api-service
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${Protobuf_INCLUDE_DIRS}
+        ${GRPC_INCLUDE_DIRS}
+        ${cpp_httplib_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${RABBITMQ_INCLUDE_DIRS}
+)
+
+target_link_libraries(api-service
+    PRIVATE
+        ${GRPC_LIBRARIES}
+        ${Protobuf_LIBRARIES}
+        pqxx
+        pq
+        ${RABBITMQ_LIBRARIES}
+        Threads::Threads
+)
+
+target_link_directories(api-service PRIVATE ${GRPC_LIBRARY_DIRS} ${RABBITMQ_LIBRARY_DIRS})

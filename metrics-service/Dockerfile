@@ -13,12 +13,16 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     protobuf-compiler-grpc \
     librabbitmq-dev \
+    postgresql \
+    postgresql-contrib \
     && rm -rf /var/lib/apt/lists/*
 
 COPY proto/metrics.proto /app/proto/
 COPY metrics-service/CMakeLists.txt .
 COPY metrics-service/include/ include/
 COPY metrics-service/src/ src/
+COPY metrics-service/tests/ tests/
+COPY metrics-service/init.sql init.sql
 
 RUN protoc --proto_path=/app/proto \
     --experimental_allow_proto3_optional \
@@ -29,6 +33,14 @@ RUN protoc --proto_path=/app/proto \
     mv /app/include/*.cc /app/src/
 
 RUN mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
+
+RUN service postgresql start \
+    && su postgres -c "psql -c \"CREATE USER metrics_user WITH PASSWORD 'metrics_password';\" || true" \
+    && su postgres -c "psql -c \"CREATE DATABASE metrics_db WITH OWNER metrics_user;\" || true" \
+    && su postgres -c "psql -d metrics_db -c \"CREATE EXTENSION IF NOT EXISTS \\\"pgcrypto\\\";\"" \
+    && su postgres -c "psql -d metrics_db -f /app/init.sql" \
+    && cd build && ctest --output-on-failure \
+    && service postgresql stop
 
 FROM gcc:13-bookworm
 

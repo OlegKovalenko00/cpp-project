@@ -1,0 +1,39 @@
+name: metrics-service-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake git pkg-config \
+            libssl-dev libpq-dev \
+            libgrpc++-dev libprotobuf-dev protobuf-compiler protobuf-compiler-grpc \
+            librabbitmq-dev
+
+      - name: Start and prepare PostgreSQL
+        run: |
+          sudo service postgresql start
+          sudo -u postgres psql -c "CREATE USER metrics_user WITH PASSWORD 'metrics_password';" || true
+          sudo -u postgres psql -c "CREATE DATABASE metrics_db WITH OWNER metrics_user;" || true
+          sudo -u postgres psql -d metrics_db -c "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"
+          sudo -u postgres psql -d metrics_db -f metrics-service/init.sql
+
+      - name: Configure
+        run: cmake -S metrics-service -B build -DMETRICS_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure

@@ -50,6 +50,11 @@ CREATE TABLE IF NOT EXISTS custom_events (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO metrics_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO metrics_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO metrics_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO metrics_user;
+
 CREATE INDEX IF NOT EXISTS idx_page_views_timestamp ON page_views(timestamp);
 CREATE INDEX IF NOT EXISTS idx_page_views_page ON page_views(page);
 CREATE INDEX IF NOT EXISTS idx_page_views_user_id ON page_views(user_id);

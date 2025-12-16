@@ -40,22 +40,19 @@ set(JSON_BuildTests OFF CACHE INTERNAL "")
 set(JSON_Install OFF CACHE INTERNAL "")
 FetchContent_MakeAvailable(libpqxx cpp_httplib json)
 
-set(SOURCES
-    src/main.cpp
+set(METRICS_CORE_SOURCES
     src/metrics.cpp
     src/database.cpp
-    src/rabbitmq.cpp
     src/http_handler.cpp
+    src/message_processor.cpp
     src/metrics.pb.cc
     src/metrics.grpc.pb.cc
 )
 
-add_executable(metrics_service ${SOURCES})
+add_library(metrics_service_core STATIC ${METRICS_CORE_SOURCES})
 
-set_target_properties(metrics_service PROPERTIES OUTPUT_NAME "metrics-service")
-
-target_include_directories(metrics_service
-    PRIVATE
+target_include_directories(metrics_service_core
+    PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${Protobuf_INCLUDE_DIRS}
         ${GRPC_INCLUDE_DIRS}
@@ -64,8 +61,8 @@ target_include_directories(metrics_service
         ${RABBITMQ_INCLUDE_DIRS}
 )
 
-target_link_libraries(metrics_service
-    PRIVATE
+target_link_libraries(metrics_service_core
+    PUBLIC
         ${GRPC_LIBRARIES}
         ${Protobuf_LIBRARIES}
         pqxx
@@ -74,4 +71,24 @@ target_link_libraries(metrics_service
         Threads::Threads
 )
 
-target_link_directories(metrics_service PRIVATE ${GRPC_LIBRARY_DIRS} ${RABBITMQ_LIBRARY_DIRS})
+target_link_directories(metrics_service_core PUBLIC ${GRPC_LIBRARY_DIRS} ${RABBITMQ_LIBRARY_DIRS})
+
+add_executable(metrics-service src/main.cpp src/rabbitmq.cpp)
+set_target_properties(metrics-service PROPERTIES OUTPUT_NAME "metrics-service")
+target_link_libraries(metrics-service PRIVATE metrics_service_core)
+
+option(METRICS_BUILD_TESTS "Build metrics-service tests" ON)
+if(METRICS_BUILD_TESTS)
+    include(CTest)
+    enable_testing()
+
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG v1.14.0
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(googletest)
+
+    add_subdirectory(tests)
+endif()

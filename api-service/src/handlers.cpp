@@ -7,6 +7,7 @@
 #include <google/protobuf/util/time_util.h>
 #include "rabbitmq.hpp"
 #include "aggregation_client.hpp"
+#include "monitoring_client.hpp"
 
 using json = nlohmann::json;
 
@@ -22,6 +23,7 @@ static int getEnvInt(const char* name, int defaultValue) {
 
 static RabbitMQ* g_rabbitmq = nullptr;
 static AggregationClient* g_aggregation_client = nullptr;
+static MonitoringClient* g_monitoring_client = nullptr;
 
 static RabbitMQ& getRabbitMQ() {
     if (!g_rabbitmq) {
@@ -50,6 +52,16 @@ static AggregationClient& getAggregationClient() {
     return *g_aggregation_client;
 }
 
+static MonitoringClient& getMonitoringClient() {
+    if (!g_monitoring_client) {
+        const std::string host = getEnvStr("MONITORING_HTTP_HOST", "localhost");
+        const int port = getEnvInt("MONITORING_HTTP_PORT", 8083);
+        const std::string baseUrl = "http://" + host + ":" + std::to_string(port);
+        g_monitoring_client = new MonitoringClient(baseUrl);
+    }
+    return *g_monitoring_client;
+}
+
 // ==================== Helpers ====================
 
 static bool parseIsoTimestamp(const std::string& iso, google::protobuf::Timestamp* ts) {
@@ -72,6 +84,7 @@ static void sendError(httplib::Response& res, int status, ErrorCode code,
 
 static void sendAccepted(httplib::Response& res) {
     res.status = 202;
+    res.set_content(R"({"status":"accepted"})", "application/json");
 }
 
 // ==================== Handlers ====================
@@ -273,6 +286,104 @@ void handleCustomEvent(const httplib::Request& req, httplib::Response& res) {
         sendError(res, 400, ErrorCode::InvalidCustomEvent,
                   std::string("Invalid JSON: ") + e.what());
     }
+}
+
+// GET /uptime
+void handleUptime(const httplib::Request& req, httplib::Response& res) {
+    const int timeoutMs = getEnvInt("MONITORING_HTTP_TIMEOUT_MS", 2000);
+    if (!req.has_param("service")) {
+        sendError(res, 400, ErrorCode::ValidationError,
+                  "Missing query param: service");
+        return;
+    }
+    const std::string service = req.get_param_value("service");
+    std::optional<std::string> period;
+    if (req.has_param("period")) {
+        period = req.get_param_value("period");
+    }
+
+    UptimeResponse respBody;
+    if (!getMonitoringClient().GetUptime(service, period, &respBody,
+                                         std::chrono::milliseconds(timeoutMs))) {
+        sendError(res, 502, ErrorCode::InternalError,
+                  "Monitoring service unavailable");
+        return;
+    }
+    res.status = 200;
+    res.set_content(json(respBody).dump(), "application/json");
+}
+
+// GET /uptime/day|week|month|year
+void handleUptimeDay(const httplib::Request& req, httplib::Response& res) {
+    const int timeoutMs = getEnvInt("MONITORING_HTTP_TIMEOUT_MS", 2000);
+    if (!req.has_param("service")) {
+        sendError(res, 400, ErrorCode::ValidationError,
+                  "Missing query param: service");
+        return;
+    }
+    UptimeResponse respBody;
+    if (!getMonitoringClient().GetUptimeDay(req.get_param_value("service"), &respBody,
+                                            std::chrono::milliseconds(timeoutMs))) {
+        sendError(res, 502, ErrorCode::InternalError,
+                  "Monitoring service unavailable");
+        return;
+    }
+    res.status = 200;
+    res.set_content(json(respBody).dump(), "application/json");
+}
+
+void handleUptimeWeek(const httplib::Request& req, httplib::Response& res) {
+    const int timeoutMs = getEnvInt("MONITORING_HTTP_TIMEOUT_MS", 2000);
+    if (!req.has_param("service")) {
+        sendError(res, 400, ErrorCode::ValidationError,
+                  "Missing query param: service");
+        return;
+    }
+    UptimeResponse respBody;
+    if (!getMonitoringClient().GetUptimeWeek(req.get_param_value("service"), &respBody,
+                                             std::chrono::milliseconds(timeoutMs))) {
+        sendError(res, 502, ErrorCode::InternalError,
+                  "Monitoring service unavailable");
+        return;
+    }
+    res.status = 200;
+    res.set_content(json(respBody).dump(), "application/json");
+}
+
+void handleUptimeMonth(const httplib::Request& req, httplib::Response& res) {
+    const int timeoutMs = getEnvInt("MONITORING_HTTP_TIMEOUT_MS", 2000);
+    if (!req.has_param("service")) {
+        sendError(res, 400, ErrorCode::ValidationError,
+                  "Missing query param: service");
+        return;
+    }
+    UptimeResponse respBody;
+    if (!getMonitoringClient().GetUptimeMonth(req.get_param_value("service"), &respBody,
+                                              std::chrono::milliseconds(timeoutMs))) {
+        sendError(res, 502, ErrorCode::InternalError,
+                  "Monitoring service unavailable");
+        return;
+    }
+    res.status = 200;
+    res.set_content(json(respBody).dump(), "application/json");
+}
+
+void handleUptimeYear(const httplib::Request& req, httplib::Response& res) {
+    const int timeoutMs = getEnvInt("MONITORING_HTTP_TIMEOUT_MS", 2000);
+    if (!req.has_param("service")) {
+        sendError(res, 400, ErrorCode::ValidationError,
+                  "Missing query param: service");
+        return;
+    }
+    UptimeResponse respBody;
+    if (!getMonitoringClient().GetUptimeYear(req.get_param_value("service"), &respBody,
+                                             std::chrono::milliseconds(timeoutMs))) {
+        sendError(res, 502, ErrorCode::InternalError,
+                  "Monitoring service unavailable");
+        return;
+    }
+    res.status = 200;
+    res.set_content(json(respBody).dump(), "application/json");
 }
 
 // GET /aggregation/watermark
@@ -661,6 +772,11 @@ void registerRoutes(httplib::Server& server) {
     server.Post("/performance", handlePerformance);
     server.Post("/errors", handleErrorEvent);
     server.Post("/custom-events", handleCustomEvent);
+    server.Get("/uptime", handleUptime);
+    server.Get("/uptime/day", handleUptimeDay);
+    server.Get("/uptime/week", handleUptimeWeek);
+    server.Get("/uptime/month", handleUptimeMonth);
+    server.Get("/uptime/year", handleUptimeYear);
     server.Get("/aggregation/watermark", handleAggregationWatermark);
     server.Post("/aggregation/page-views", handleAggregationPageViews);
     server.Post("/aggregation/clicks", handleAggregationClicks);

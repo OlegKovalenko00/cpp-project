@@ -17,6 +17,51 @@ void from_json(const nlohmann::json& j, ErrorResponse& e) {
     }
 }
 
+// ==================== Monitoring ====================
+
+void to_json(nlohmann::json& j, const UptimePeriodStat& s) {
+    j = nlohmann::json{{"ok", s.ok}, {"total", s.total}, {"percent", s.percent}};
+}
+
+void from_json(const nlohmann::json& j, UptimePeriodStat& s) {
+    j.at("ok").get_to(s.ok);
+    j.at("total").get_to(s.total);
+    j.at("percent").get_to(s.percent);
+}
+
+void to_json(nlohmann::json& j, const UptimePeriods& p) {
+    j = nlohmann::json::object();
+    if (p.day.has_value())
+        j["day"] = p.day.value();
+    if (p.week.has_value())
+        j["week"] = p.week.value();
+    if (p.month.has_value())
+        j["month"] = p.month.value();
+    if (p.year.has_value())
+        j["year"] = p.year.value();
+}
+
+void from_json(const nlohmann::json& j, UptimePeriods& p) {
+    if (j.contains("day") && !j["day"].is_null())
+        p.day = j["day"].get<UptimePeriodStat>();
+    if (j.contains("week") && !j["week"].is_null())
+        p.week = j["week"].get<UptimePeriodStat>();
+    if (j.contains("month") && !j["month"].is_null())
+        p.month = j["month"].get<UptimePeriodStat>();
+    if (j.contains("year") && !j["year"].is_null())
+        p.year = j["year"].get<UptimePeriodStat>();
+}
+
+void to_json(nlohmann::json& j, const UptimeResponse& r) {
+    j = nlohmann::json{{"service", r.service}, {"period", r.period}, {"periods", r.periods}};
+}
+
+void from_json(const nlohmann::json& j, UptimeResponse& r) {
+    j.at("service").get_to(r.service);
+    j.at("period").get_to(r.period);
+    j.at("periods").get_to(r.periods);
+}
+
 // ==================== PageViewEvent ====================
 
 void to_json(nlohmann::json& j, const PageViewEvent& e) {

@@ -13,6 +13,10 @@ services:
       - RABBITMQ_PORT=5672
       - RABBITMQ_USERNAME=guest
       - RABBITMQ_PASSWORD=guest
+      - AGGREGATION_GRPC_HOST=aggregation-service
+      - AGGREGATION_GRPC_PORT=50052
+      - MONITORING_HTTP_HOST=host.docker.internal
+      - MONITORING_HTTP_PORT=8083
     restart: unless-stopped
     networks:
       - metrics-service_metrics-network

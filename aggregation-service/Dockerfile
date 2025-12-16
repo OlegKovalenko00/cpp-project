@@ -20,6 +20,7 @@ COPY proto/ proto/
 COPY aggregation-service/CMakeLists.txt aggregation-service/
 COPY aggregation-service/include/ aggregation-service/include/
 COPY aggregation-service/src/ aggregation-service/src/
+COPY aggregation-service/tests/ aggregation-service/tests/
 
 WORKDIR /app/aggregation-service
 

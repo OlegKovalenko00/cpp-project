@@ -15,18 +15,13 @@ RUN apt-get update && apt-get install -y \
     librabbitmq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY proto/metrics.proto /app/proto/
-COPY metrics-service/CMakeLists.txt .
-COPY metrics-service/include/ include/
-COPY metrics-service/src/ src/
+COPY proto/ proto/
+COPY metrics-service/CMakeLists.txt metrics-service/
+COPY metrics-service/include/ metrics-service/include/
+COPY metrics-service/src/ metrics-service/src/
+COPY metrics-service/tests/ metrics-service/tests/
 
-RUN protoc --proto_path=/app/proto \
-    --experimental_allow_proto3_optional \
-    --cpp_out=/app/include \
-    --grpc_out=/app/include \
-    --plugin=protoc-gen-grpc=$(which grpc_cpp_plugin) \
-    /app/proto/metrics.proto && \
-    mv /app/include/*.cc /app/src/
+WORKDIR /app/metrics-service
 
 RUN mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
 
@@ -42,7 +37,7 @@ RUN apt-get update && apt-get install -y \
     libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/build/metrics-service .
+COPY --from=builder /app/metrics-service/build/metrics-service .
 
 ENV GRPC_PORT=50051
 ENV HTTP_PORT=8080

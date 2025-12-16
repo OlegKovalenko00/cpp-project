@@ -13,10 +13,11 @@ RUN apt-get update && apt-get install -y \
     librabbitmq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Копируем файлы api-service
+# Копируем исходники
 COPY CMakeLists.txt .
 COPY include/ include/
 COPY src/ src/
+COPY tests/ tests/
 
 # Собираем проект - httplib и json скачиваются через CMake FetchContent
 RUN mkdir -p build && cd build && \

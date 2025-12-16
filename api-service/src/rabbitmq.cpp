@@ -18,6 +18,8 @@ RabbitMQ::~RabbitMQ() {
 }
 
 bool RabbitMQ::connect() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
     conn_ = amqp_new_connection();
     if (!conn_) {
         std::cerr << "[RabbitMQ] Failed to create connection" << std::endl;
@@ -81,6 +83,8 @@ bool RabbitMQ::checkRpcReply(const char* context) {
 
 bool RabbitMQ::publish(const std::string& exchange, const std::string& routing_key,
                        const std::string& message) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
     if (!connected_) {
         std::cerr << "[RabbitMQ] Not connected" << std::endl;
         return false;

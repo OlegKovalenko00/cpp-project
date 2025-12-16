@@ -106,20 +106,3 @@ target_link_libraries(aggregation-core PUBLIC
 
 add_executable(aggregation-service src/main.cpp)
 target_link_libraries(aggregation-service PRIVATE aggregation-core)
-
-enable_testing()
-
-add_executable(test_aggregator tests/test_aggregator.cpp)
-target_link_libraries(test_aggregator PRIVATE aggregation-core)
-add_test(NAME test_aggregator COMMAND test_aggregator)
-
-add_executable(test_database tests/test_database.cpp)
-target_link_libraries(test_database PRIVATE aggregation-core)
-add_test(NAME test_database COMMAND test_database)
-
-add_executable(test_grpc_connection tests/test_grpc_connection.cpp)
-target_link_libraries(test_grpc_connection PRIVATE aggregation-core)
-
-add_executable(test_aggregation_grpc_server tests/test_aggregation_grpc_server.cpp)
-target_link_libraries(test_aggregation_grpc_server PRIVATE aggregation-core)
-

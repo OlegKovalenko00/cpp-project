@@ -131,7 +131,7 @@ void RabbitMQConsumer::consumeLoop() {
         amqp_envelope_t envelope;
         amqp_maybe_release_buffers(conn_);
 
-        struct timeval timeout = {0, 100000}; // 100ms timeout
+        struct timeval timeout = {0, 10000}; // 100ms timeout
         amqp_rpc_reply_t reply = amqp_consume_message(conn_, &envelope, &timeout, 0);
 
         if (reply.reply_type == AMQP_RESPONSE_NORMAL) {

@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.14)
-project(api-service)
+cmake_minimum_required(VERSION 3.15)
+project(api-service LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,7 +9,6 @@ include(FetchContent)
 find_package(Threads REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(PkgConfig REQUIRED)
-find_package(grpc REQUIRED)
 
 pkg_check_modules(GRPC REQUIRED grpc++ grpc)
 pkg_check_modules(RABBITMQ REQUIRED librabbitmq)
@@ -17,7 +16,7 @@ pkg_check_modules(RABBITMQ REQUIRED librabbitmq)
 set(FETCHCONTENT_QUIET OFF)
 FetchContent_Declare(
     libpqxx
-    GIT_REPOSITORY https://github.com/jtv/libpqxx.`git
+    GIT_REPOSITORY https://github.com/jtv/libpqxx.git
     GIT_TAG 7.9.2
     GIT_SHALLOW TRUE
     GIT_PROGRESS TRUE
@@ -42,13 +41,21 @@ set(JSON_BuildTests OFF CACHE INTERNAL "")
 set(JSON_Install OFF CACHE INTERNAL "")
 FetchContent_MakeAvailable(libpqxx cpp_httplib json)
 
-
+# Исходные файлы api-service
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
-add_executable(api-service ${SOURCES})
+# Добавляем уже сгенерированные protobuf файлы из src/
+set(PROTO_SOURCES
+    src/aggregation.pb.cc
+    src/aggregation.grpc.pb.cc
+)
+
+add_executable(api-service
+    ${SOURCES}
+    ${PROTO_SOURCES}
+)
 
 set_target_properties(api-service PROPERTIES OUTPUT_NAME "api-service")
-
 
 target_include_directories(api-service
     PRIVATE
@@ -58,9 +65,7 @@ target_include_directories(api-service
         ${cpp_httplib_SOURCE_DIR}
         ${json_SOURCE_DIR}/include
         ${RABBITMQ_INCLUDE_DIRS}
-        ${Protobuf_INCLUDE_DIRS} 
 )
-
 
 target_link_libraries(api-service
     PRIVATE

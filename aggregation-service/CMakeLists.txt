@@ -25,7 +25,15 @@ FetchContent_Declare(
     GIT_TAG v3.11.3
 )
 
-FetchContent_MakeAvailable(httplib json)
+# Google Test
+FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.14.0
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(httplib json googletest)
 
 find_package(OpenSSL REQUIRED)
 find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin)
@@ -106,3 +114,26 @@ target_link_libraries(aggregation-core PUBLIC
 
 add_executable(aggregation-service src/main.cpp)
 target_link_libraries(aggregation-service PRIVATE aggregation-core)
+
+# ===== Тесты =====
+enable_testing()
+
+# Основные юнит-тесты с Google Test
+add_executable(aggregation_unit_tests
+    tests/test_aggregator_unit.cpp
+    tests/test_database_unit.cpp
+)
+
+target_link_libraries(aggregation_unit_tests
+    PRIVATE
+        aggregation-core
+        GTest::gtest
+        GTest::gtest_main
+)
+
+target_include_directories(aggregation_unit_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${GENERATED_DIR}
+)
+
+add_test(NAME AggregationUnitTests COMMAND aggregation_unit_tests)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "metrics.grpc.pb.h"
+#include "metrics.pb.h"
 #include "database.h"
 #include <grpcpp/grpcpp.h>
 #include <memory>

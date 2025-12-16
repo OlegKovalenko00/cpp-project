@@ -2,160 +2,6 @@
 
 Сервис агрегации метрик для системы аналитики. Получает сырые события от `metrics-service` через gRPC, агрегирует их в 5-минутные бакеты и сохраняет в PostgreSQL.
 
-## Быстрый старт
-
-### 1. Установка зависимостей (Ubuntu/Debian)
-
-```bash
-sudo apt update
-sudo apt install -y \
-    build-essential \
-    cmake \
-    libpq-dev \
-    libgrpc++-dev \
-    libprotobuf-dev \
-    protobuf-compiler-grpc \
-    pkg-config \
-    libssl-dev
-```
-
-### 2. Запуск metrics-service (обязательно первым!)
-
-```bash
-cd ../metrics-service
-docker-compose up -d
-```
-
-Дождитесь запуска (проверьте логи):
-```bash
-docker-compose logs -f
-# Должны увидеть: "Metrics gRPC server listening on 0.0.0.0:50051"
-```
-
-### 3. Запуск PostgreSQL для aggregation-service
-
-```bash
-cd ../aggregation-service
-docker-compose up -d
-```
-
-### 4. Сборка проекта
-
-```bash
-mkdir -p build && cd build
-cmake ..
-make -j$(nproc)
-```
-
-### 5. Запуск сервиса
-
-```bash
-./aggregation-service
-```
-
-Ожидаемый вывод:
-```
-Aggregation Service started
-Aggregation interval set to 60 seconds
-Connected to database successfully
-Database schema initialized successfully (5 tables + watermark)
-[HTTP] Routes registered:
-  GET /health/ping  - liveness probe
-  GET /health/ready - readiness probe
-Connecting to metrics-service via gRPC at localhost:50051
-MetricsClient: gRPC channel is ready
-HTTP server listening on 0.0.0.0:8081
-Starting periodic aggregation loop...
-
-=== Starting aggregation cycle ===
-Aggregator::run() started
-Watermark: last aggregated at epoch + 1765224298 seconds
-Fetching events from metrics-service via gRPC...
-MetricsClient: received X page_view events
-...
-Aggregation completed successfully. Watermark updated.
-=== Aggregation cycle completed successfully ===
-
-[60 секунд спустя начнется следующий цикл]
-
-Press Ctrl+C to stop gracefully
-```
-
-### 6. Добавление тестовых данных (опционально)
-
-```bash
-# Добавить свежие данные в metrics-service
-chmod +x scripts/add_test_data.sh
-./scripts/add_test_data.sh
-
-# Сбросить watermark чтобы получить все данные заново
-docker exec -i aggregation-service_agg-postgres_1 psql -U agguser -d aggregation_db \
-  -c "UPDATE aggregation_watermark SET last_aggregated_at = NOW() - INTERVAL '2 hours';"
-
-# Перезапустить сервис
-./build/aggregation-service
-```
-
-## Проверка работоспособности
-
-### Health Check
-
-```bash
-curl http://localhost:8081/health/ping
-# {"status":"ok"}
-
-curl http://localhost:8081/health/ready
-# {"status":"ready","database":"connected"}
-```
-
-### Тест gRPC соединения с metrics-service
-
-```bash
-./build/test_grpc_connection localhost 50051
-```
-
-### Тест gRPC сервера aggregation-service
-
-```bash
-# Запустите aggregation-service в одном терминале
-./build/aggregation-service
-
-# В другом терминале запустите тест
-./build/test_aggregation_grpc_server localhost:50052
-```
-
-Ожидаемый вывод:
-```
-=== Testing Aggregation gRPC Server ===
-Connecting to: localhost:50052
-
-1. Testing GetWatermark()...
-   ✓ Watermark retrieved successfully
-   Last aggregated at: 1734374400 seconds since epoch
-
-2. Testing GetPageViewsAgg()...
-   Project ID: test-project
-   Time range: last 24 hours
-   ✓ Page views retrieved successfully
-   Found 3 aggregated page view records
-
-   Sample records:
-   - Page: /home, Views: 15, Unique users: 8
-   - Page: /products, Views: 10, Unique users: 5
-   - Page: /checkout, Views: 5, Unique users: 3
-
-=== Test Complete ===
-```
-
-### Просмотр агрегированных данных
-
-```bash
-docker exec -i aggregation-service_agg-postgres_1 psql -U agguser -d aggregation_db -c "
-SELECT * FROM agg_page_views ORDER BY time_bucket DESC LIMIT 5;
-SELECT * FROM agg_performance ORDER BY time_bucket DESC LIMIT 5;
-"
-```
-
 ## Архитектура
 
 ```
@@ -340,10 +186,12 @@ aggregation-service/
 │   ├── handlers.cpp        # HTTP handlers
 │   └── metrics_client.cpp  # Реализация gRPC клиента
 └── tests/
-    ├── test_aggregator.cpp     # Тесты агрегации
-    ├── test_database.cpp       # Тесты БД
+    ├── test_aggregator.cpp     # Интеграционные тесты агрегации
+    ├── test_database.cpp       # Интеграционные тесты БД
     ├── test_grpc_connection.cpp # Тест gRPC соединения (metrics-service)
-    └── test_aggregation_grpc_server.cpp # Тест gRPC сервера
+    ├── test_aggregation_grpc_server.cpp # Тест gRPC сервера
+    ├── test_aggregator_unit.cpp # Юнит-тесты агрегатора (Google Test)
+    └── test_database_unit.cpp   # Юнит-тесты структур данных (Google Test)
 ```
 
 ## Как работает сервис
@@ -394,25 +242,80 @@ aggregation-service/
 
 **Индексы:** Созданы индексы для оптимизации запросов по `time_bucket`, `project_id`, `page`.
 
-### Ручная инициализация схемы
+## Тестирование
 
-Если запускаете сервис локально (не через docker-compose):
+### Юнит-тесты (Google Test)
+
+Проект использует Google Test для юнит-тестирования основного функционала без зависимостей от внешних сервисов.
+
+#### Запуск юнит-тестов
 
 ```bash
-# Убедитесь что init.sql находится в текущей директории или build/
-cp init.sql build/
+cd build
 
-# Или можно выполнить SQL вручную
-psql -h localhost -p 5434 -U agguser -d aggregation_db -f init.sql
+# Собрать и запустить юнит-тесты
+make aggregation_unit_tests
+./aggregation_unit_tests
+
+# Или использовать скрипт
+cd ..
+./scripts/run_unit_tests.sh
 ```
 
-Сервис автоматически пытается загрузить `init.sql` из следующих путей:
-- `./init.sql`
-- `../init.sql`
-- `../../init.sql`
-- `../aggregation-service/init.sql`
+#### Запуск конкретных тестов
 
-## Тестирование
+```bash
+# Запустить все тесты вспомогательных функций
+./aggregation_unit_tests --gtest_filter=AggregatorUtilsTest.*
+
+# Запустить тесты агрегации
+./aggregation_unit_tests --gtest_filter=AggregatorAggregationTest.*
+
+# Запустить тесты структур данных
+./aggregation_unit_tests --gtest_filter=AggregationResultTest.*
+
+# Запустить тесты валидации
+./aggregation_unit_tests --gtest_filter=DataValidationTest.*
+
+# Запустить с подробным выводом
+./aggregation_unit_tests --gtest_verbose
+
+# Сохранить результаты в XML
+./aggregation_unit_tests --gtest_output=xml:test_results.xml
+```
+
+#### Покрытие тестами
+
+**Вспомогательные функции:**
+- ✅ `calculateAverage()` - расчет среднего значения
+- ✅ `calculateMin()` - поиск минимума
+- ✅ `calculateMax()` - поиск максимума
+- ✅ `calculateP95()` - расчет 95-го перцентиля
+
+**Агрегация событий:**
+- ✅ Агрегация page views (пустой массив, одно событие, несколько пользователей)
+- ✅ Агрегация page views (один пользователь с несколькими сессиями)
+- ✅ Агрегация page views (разные страницы)
+- ✅ Агрегация performance метрик (расчет avg и p95)
+- ✅ Агрегация errors по severity (WARNING, ERROR, CRITICAL)
+
+**Структуры данных:**
+- ✅ `AggregationResult` - инициализация и добавление данных
+- ✅ `AggregatedPageViews` - значения по умолчанию и установка
+- ✅ `AggregatedClicks` - значения по умолчанию и установка
+- ✅ `AggregatedPerformance` - метрики производительности
+- ✅ `AggregatedErrors` - подсчет ошибок
+- ✅ `AggregatedCustomEvents` - кастомные события
+
+**Валидация и граничные условия:**
+- ✅ Максимальные значения (INT64_MAX)
+- ✅ Пустые и очень длинные строки (1000+ символов)
+- ✅ Некорректные значения (отрицательные счетчики)
+- ✅ Нулевые значения
+
+**Статистика:** ~40+ тестов, покрывающих основной функционал сервиса.
+
+### Интеграционные тесты
 
 ```bash
 cd build
@@ -427,32 +330,41 @@ ctest --output-on-failure
 ./test_grpc_connection # Тест gRPC соединения с metrics-service
 ```
 
-## Устранение проблем
-
-### "Connection refused" к metrics-service
+### Тест gRPC соединения с metrics-service
 
 ```bash
-# Проверить что metrics-service запущен
-docker ps | grep metrics
-
-# Проверить порт
-nc -zv localhost 50051
+./build/test_grpc_connection localhost 50051
 ```
 
-### "0 events received" при запуске
+### Тест gRPC сервера aggregation-service
 
-Watermark может быть в будущем. Сбросьте его:
 ```bash
-docker exec -i aggregation-service_agg-postgres_1 psql -U agguser -d aggregation_db \
-  -c "UPDATE aggregation_watermark SET last_aggregated_at = NOW() - INTERVAL '2 hours';"
+# Запустите aggregation-service в одном терминале
+./build/aggregation-service
+
+# В другом терминале запустите тест
+./build/test_aggregation_grpc_server localhost:50052
 ```
 
-### Ошибка подключения к PostgreSQL
+Ожидаемый вывод:
+```
+=== Testing Aggregation gRPC Server ===
+Connecting to: localhost:50052
 
-```bash
-# Проверить контейнер
-docker ps | grep agg-postgres
+1. Testing GetWatermark()...
+   ✓ Watermark retrieved successfully
+   Last aggregated at: 1734374400 seconds since epoch
 
-# Перезапустить
-docker-compose down -v && docker-compose up -d
+2. Testing GetPageViewsAgg()...
+   Project ID: test-project
+   Time range: last 24 hours
+   ✓ Page views retrieved successfully
+   Found 3 aggregated page view records
+
+   Sample records:
+   - Page: /home, Views: 15, Unique users: 8
+   - Page: /products, Views: 10, Unique users: 5
+   - Page: /checkout, Views: 5, Unique users: 3
+
+=== Test Complete ===
 ```

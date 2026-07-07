@@ -1,370 +1,88 @@
 # Aggregation Service
 
-Сервис агрегации метрик для системы аналитики. Получает сырые события от `metrics-service` через gRPC, агрегирует их в 5-минутные бакеты и сохраняет в PostgreSQL.
+`aggregation-service` reads raw events from `metrics-service` over gRPC, builds 5-minute metric buckets, and stores the aggregated results in PostgreSQL. It exposes aggregated data over gRPC and serves HTTP health endpoints.
 
-## Архитектура
+## Responsibilities
 
-```
-┌─────────────────────┐       gRPC        ┌─────────────────────┐
-│ aggregation-service │ ◄──────────────── │   metrics-service   │
-│                     │   (port 50051)    │                     │
-│   MetricsClient     │   RawEvents       │  MetricsService     │
-│   Aggregator        │                   │  PostgreSQL:5433    │
-│   Database          │                   │                     │
-│                     │                   └─────────────────────┘
-│ AggregationService  │       gRPC
-│   (gRPC Server)     │ ───────────────►  ┌─────────────────────┐
-│   port 50052        │   Aggregated      │   api-service /     │
-│                     │      Data         │ monitoring-service  │
-└─────────┬───────────┘                   └─────────────────────┘
-          │
-          ▼
-┌─────────────────────┐
-│     PostgreSQL      │
-│   (port 5434)       │
-│  aggregation_db     │
-│                     │
-│  - agg_page_views   │
-│  - agg_clicks       │
-│  - agg_performance  │
-│  - agg_errors       │
-│  - agg_custom_events│
-│  - watermark        │
-└─────────────────────┘
-```
+- Fetch raw page-view, click, performance, error, and custom-event data from `metrics-service`.
+- Aggregate metrics into 5-minute buckets.
+- Store aggregated results and aggregation watermark data in PostgreSQL.
+- Expose aggregated metric reads through `metricsys.aggregation.AggregationService`.
+- Serve HTTP health checks.
 
-### Роли сервиса
+## Interfaces
 
-**aggregation-service** выполняет две роли:
+| Interface | Port | Description |
+| --- | --- | --- |
+| gRPC | `50052` inside the Compose network | Aggregated metric API |
+| HTTP | `8081` | Health endpoints |
+| PostgreSQL | Host port `5434` | Aggregated metric storage |
 
-1. **gRPC Клиент** (к metrics-service:50051):
-   - Получает сырые события
-   - Агрегирует их в 5-минутные бакеты
-   - Сохраняет в свою БД
+HTTP endpoints:
 
-2. **gRPC Сервер** (порт 50052):
-   - Предоставляет агрегированные данные
-   - Используется api-service и monitoring-service
-   - Методы: GetPageViewsAgg, GetClicksAgg, GetPerformanceAgg, GetErrorsAgg, GetCustomEventsAgg, GetWatermark
+- `GET /health/ping`
+- `GET /health`
+- `GET /ping`
 
-## Переменные окружения
+gRPC methods are defined in [`../proto/aggregation.proto`](../proto/aggregation.proto).
 
-| Переменная | По умолчанию | Описание |
-|------------|--------------|----------|
-| `AGG_DB_HOST` | `localhost` | Хост PostgreSQL aggregation_db |
-| `AGG_DB_PORT` | `5434` | Порт PostgreSQL |
-| `AGG_DB_NAME` | `aggregation_db` | Имя базы данных |
-| `AGG_DB_USER` | `agguser` | Пользователь БД |
-| `AGG_DB_PASSWORD` | `aggpassword` | Пароль БД |
-| `METRICS_GRPC_HOST` | `localhost` | Хост metrics-service (клиент) |
-| `METRICS_GRPC_PORT` | `50051` | Порт gRPC metrics-service (клиент) |
-| `AGG_GRPC_HOST` | `0.0.0.0` | Хост gRPC сервера aggregation-service |
-| `AGG_GRPC_PORT` | `50052` | Порт gRPC сервера aggregation-service |
-| `AGG_HTTP_HOST` | `0.0.0.0` | Хост HTTP сервера |
-| `AGG_HTTP_PORT` | `8081` | Порт HTTP сервера |
-| `AGGREGATION_INTERVAL_SEC` | `60` | Интервал между циклами агрегации (секунды) |
+## Run with Docker Compose
 
-### Примеры настройки
+Start `metrics-service` first so the shared Docker network exists, or use the root `build.sh` script to start the full stack.
 
 ```bash
-# Увеличить интервал агрегации до 5 минут
-export AGGREGATION_INTERVAL_SEC=300
+cd aggregation-service
+docker compose up --build -d
+```
 
-# Запустить с кастомной конфигурацией
-AGGREGATION_INTERVAL_SEC=30 \
-AGG_DB_HOST=postgres-server \
-METRICS_GRPC_HOST=metrics-grpc \
+This starts:
+
+- `aggregation-service`
+- PostgreSQL database `aggregation_db`
+
+## Local build
+
+Requirements:
+
+- CMake 3.16+
+- C++23 compiler
+- Protobuf and gRPC development packages
+- PostgreSQL client libraries
+- OpenSSL
+
+Build:
+
+```bash
+cd aggregation-service
+mkdir -p build
+cd build
+cmake ..
+cmake --build . --parallel
+```
+
+Run:
+
+```bash
 ./aggregation-service
 ```
 
-## Типы агрегируемых событий
-
-| Тип события | Агрегируемые метрики |
-|-------------|---------------------|
-| `page_view` | views_count, unique_users, unique_sessions |
-| `click` | clicks_count по element_id |
-| `performance` | avg/p95 для total_load, ttfb, fcp, lcp |
-| `error` | errors_count, warning_count, critical_count по error_type |
-| `custom` | events_count по event_name |
-
-## gRPC API
-
-aggregation-service предоставляет следующие gRPC методы (порт 50052):
-
-### GetWatermark
-Получить последнее время агрегации (watermark).
-
-**Request:** `GetWatermarkRequest` (пустой)
-**Response:** `GetWatermarkResponse`
-- `last_aggregated_at`: timestamp последней агрегации
-
-### GetPageViewsAgg
-Получить агрегированные данные просмотров страниц.
-
-**Request:** `GetPageViewsAggRequest`
-- `project_id`: ID проекта (обязательно)
-- `time_range`: временной диапазон (from, to)
-- `page`: фильтр по странице (опционально)
-- `pagination`: limit, offset
-
-**Response:** `GetPageViewsAggResponse`
-- `rows[]`: массив агрегатов с полями time_bucket, page, views_count, unique_users, unique_sessions
-
-### GetClicksAgg
-Получить агрегированные данные кликов.
-
-**Request:** `GetClicksAggRequest`
-- `project_id`: ID проекта
-- `time_range`: временной диапазон
-- `page`: фильтр по странице
-- `element_id`: фильтр по элементу
-- `pagination`: limit, offset
-
-**Response:** `GetClicksAggResponse`
-- `rows[]`: массив агрегатов с полями time_bucket, page, element_id, clicks_count, unique_users, unique_sessions
-
-### GetPerformanceAgg
-Получить агрегированные данные производительности.
-
-**Request:** `GetPerformanceAggRequest`
-- `project_id`: ID проекта
-- `time_range`: временной диапазон
-- `page`: фильтр по странице
-- `pagination`: limit, offset
-
-**Response:** `GetPerformanceAggResponse`
-- `rows[]`: массив агрегатов с метриками avg/p95 для total_load, ttfb, fcp, lcp
-
-### GetErrorsAgg
-Получить агрегированные данные ошибок.
-
-**Request:** `GetErrorsAggRequest`
-- `project_id`: ID проекта
-- `time_range`: временной диапазон
-- `page`: фильтр по странице
-- `error_type`: фильтр по типу ошибки
-- `pagination`: limit, offset
-
-**Response:** `GetErrorsAggResponse`
-- `rows[]`: массив агрегатов с полями errors_count, warning_count, critical_count, unique_users
-
-### GetCustomEventsAgg
-Получить агрегированные данные кастомных событий.
-
-**Request:** `GetCustomEventsAggRequest`
-- `project_id`: ID проекта
-- `time_range`: временной диапазон
-- `event_name`: название события (обязательно)
-- `page`: фильтр по странице
-- `pagination`: limit, offset
-
-**Response:** `GetCustomEventsAggResponse`
-- `rows[]`: массив агрегатов с полями events_count, unique_users, unique_sessions
-
-## Структура проекта
-
-```
-aggregation-service/
-├── CMakeLists.txt          # Конфигурация сборки
-├── docker-compose.yml      # PostgreSQL контейнер (порт 5434)
-├── Dockerfile              # Docker образ сервиса
-├── init.sql                # SQL схема базы данных
-├── README.md               # Документация
-├── scripts/
-│   └── add_test_data.sh    # Скрипт добавления тестовых данных
-├── include/
-│   ├── aggregator.h        # Логика агрегации, структуры данных
-│   ├── aggregation_server.h # gRPC сервер для API
-│   ├── database.h          # Работа с PostgreSQL
-│   ├── handlers.h          # HTTP endpoints
-│   └── metrics_client.h    # gRPC клиент к metrics-service
-├── src/
-│   ├── main.cpp            # Точка входа
-│   ├── aggregator.cpp      # Реализация агрегации
-│   ├── aggregation_server.cpp # Реализация gRPC сервера
-│   ├── database.cpp        # Реализация работы с БД
-│   ├── handlers.cpp        # HTTP handlers
-│   └── metrics_client.cpp  # Реализация gRPC клиента
-└── tests/
-    ├── test_aggregator.cpp     # Интеграционные тесты агрегации
-    ├── test_database.cpp       # Интеграционные тесты БД
-    ├── test_grpc_connection.cpp # Тест gRPC соединения (metrics-service)
-    ├── test_aggregation_grpc_server.cpp # Тест gRPC сервера
-    ├── test_aggregator_unit.cpp # Юнит-тесты агрегатора (Google Test)
-    └── test_database_unit.cpp   # Юнит-тесты структур данных (Google Test)
-```
-
-## Как работает сервис
-
-### Периодическая агрегация
-
-Сервис работает в **непрерывном режиме** с периодическим запуском агрегации:
-
-1. При старте подключается к PostgreSQL и metrics-service
-2. Запускает HTTP сервер для health checks
-3. Входит в цикл агрегации с интервалом `AGGREGATION_INTERVAL_SEC` (по умолчанию 60 секунд)
-4. При получении SIGINT/SIGTERM корректно завершает работу (graceful shutdown)
-
-### Watermark механизм
-
-Сервис использует паттерн **watermark** для инкрементальной агрегации:
-
-1. Читает `last_aggregated_at` из таблицы `aggregation_watermark`
-2. Запрашивает события от `metrics-service` за период `[watermark, now]`
-3. Агрегирует события в 5-минутные бакеты
-4. Записывает результаты в соответствующие таблицы
-5. Обновляет watermark на текущее время
-
-Это гарантирует, что события не будут агрегированы повторно.
-
-### Обработка ошибок
-
-Сервис устойчив к временным сбоям:
-
-- **Ошибки gRPC**: логируются, агрегация пропускается, повторяется на следующем цикле
-- **Ошибки БД**: логируются с полным стектрейсом, watermark не обновляется
-- **Ошибки агрегации**: не прерывают работу сервиса, только текущий цикл
-- **Graceful shutdown**: корректно завершает HTTP сервер и закрывает соединения
-
-## База данных
-
-### Схема БД
-
-Схема базы данных определена в файле `init.sql`. При запуске через docker-compose, PostgreSQL автоматически выполняет этот файл для инициализации таблиц.
-
-**Таблицы:**
-- `agg_page_views` - агрегированные просмотры страниц
-- `agg_clicks` - агрегированные клики
-- `agg_performance` - агрегированные метрики производительности
-- `agg_errors` - агрегированные ошибки
-- `agg_custom_events` - агрегированные кастомные события
-- `aggregation_watermark` - отслеживание прогресса агрегации
-
-**Индексы:** Созданы индексы для оптимизации запросов по `time_bucket`, `project_id`, `page`.
-
-## Тестирование
-
-### Юнит-тесты (Google Test)
-
-Проект использует Google Test для юнит-тестирования основного функционала без зависимостей от внешних сервисов.
-
-#### Запуск юнит-тестов
+## Tests
 
 ```bash
+cd aggregation-service
+mkdir -p build
 cd build
-
-# Собрать и запустить юнит-тесты
-make aggregation_unit_tests
-./aggregation_unit_tests
-
-# Или использовать скрипт
-cd ..
-./scripts/run_unit_tests.sh
-```
-
-#### Запуск конкретных тестов
-
-```bash
-# Запустить все тесты вспомогательных функций
-./aggregation_unit_tests --gtest_filter=AggregatorUtilsTest.*
-
-# Запустить тесты агрегации
-./aggregation_unit_tests --gtest_filter=AggregatorAggregationTest.*
-
-# Запустить тесты структур данных
-./aggregation_unit_tests --gtest_filter=AggregationResultTest.*
-
-# Запустить тесты валидации
-./aggregation_unit_tests --gtest_filter=DataValidationTest.*
-
-# Запустить с подробным выводом
-./aggregation_unit_tests --gtest_verbose
-
-# Сохранить результаты в XML
-./aggregation_unit_tests --gtest_output=xml:test_results.xml
-```
-
-#### Покрытие тестами
-
-**Вспомогательные функции:**
-- ✅ `calculateAverage()` - расчет среднего значения
-- ✅ `calculateMin()` - поиск минимума
-- ✅ `calculateMax()` - поиск максимума
-- ✅ `calculateP95()` - расчет 95-го перцентиля
-
-**Агрегация событий:**
-- ✅ Агрегация page views (пустой массив, одно событие, несколько пользователей)
-- ✅ Агрегация page views (один пользователь с несколькими сессиями)
-- ✅ Агрегация page views (разные страницы)
-- ✅ Агрегация performance метрик (расчет avg и p95)
-- ✅ Агрегация errors по severity (WARNING, ERROR, CRITICAL)
-
-**Структуры данных:**
-- ✅ `AggregationResult` - инициализация и добавление данных
-- ✅ `AggregatedPageViews` - значения по умолчанию и установка
-- ✅ `AggregatedClicks` - значения по умолчанию и установка
-- ✅ `AggregatedPerformance` - метрики производительности
-- ✅ `AggregatedErrors` - подсчет ошибок
-- ✅ `AggregatedCustomEvents` - кастомные события
-
-**Валидация и граничные условия:**
-- ✅ Максимальные значения (INT64_MAX)
-- ✅ Пустые и очень длинные строки (1000+ символов)
-- ✅ Некорректные значения (отрицательные счетчики)
-- ✅ Нулевые значения
-
-**Статистика:** ~40+ тестов, покрывающих основной функционал сервиса.
-
-### Интеграционные тесты
-
-```bash
-cd build
-
-# Запустить все тесты
-make test_aggregator test_database test_grpc_connection
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+cmake --build . --parallel
 ctest --output-on-failure
-
-# Или отдельно
-./test_aggregator      # Тесты логики агрегации
-./test_database        # Тесты работы с БД  
-./test_grpc_connection # Тест gRPC соединения с metrics-service
 ```
 
-### Тест gRPC соединения с metrics-service
+## Configuration
 
-```bash
-./build/test_grpc_connection localhost 50051
-```
+The Docker Compose file sets the main runtime configuration:
 
-### Тест gRPC сервера aggregation-service
-
-```bash
-# Запустите aggregation-service в одном терминале
-./build/aggregation-service
-
-# В другом терминале запустите тест
-./build/test_aggregation_grpc_server localhost:50052
-```
-
-Ожидаемый вывод:
-```
-=== Testing Aggregation gRPC Server ===
-Connecting to: localhost:50052
-
-1. Testing GetWatermark()...
-   ✓ Watermark retrieved successfully
-   Last aggregated at: 1734374400 seconds since epoch
-
-2. Testing GetPageViewsAgg()...
-   Project ID: test-project
-   Time range: last 24 hours
-   ✓ Page views retrieved successfully
-   Found 3 aggregated page view records
-
-   Sample records:
-   - Page: /home, Views: 15, Unique users: 8
-   - Page: /products, Views: 10, Unique users: 5
-   - Page: /checkout, Views: 5, Unique users: 3
-
-=== Test Complete ===
-```
+| Variable | Purpose |
+| --- | --- |
+| `AGG_DB_HOST`, `AGG_DB_PORT`, `AGG_DB_NAME`, `AGG_DB_USER`, `AGG_DB_PASSWORD` | PostgreSQL connection |
+| `AGG_HTTP_HOST`, `AGG_HTTP_PORT` | HTTP health server bind address and port |
+| `METRICS_GRPC_HOST`, `METRICS_GRPC_PORT` | Raw metric gRPC source |

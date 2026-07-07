@@ -1,125 +1,90 @@
 # Metrics Service
 
-Микросервис для сбора, хранения и предоставления веб-аналитики. Часть распределённой системы мониторинга.
+`metrics-service` consumes analytics events from RabbitMQ, stores raw metric data in PostgreSQL, and exposes raw metric reads over gRPC. It also provides HTTP health endpoints for service monitoring.
 
-## Краткое описание
+## Responsibilities
 
-Сервис принимает события от api-service через RabbitMQ, сохраняет их в PostgreSQL и предоставляет данные другим сервисам через gRPC. Для мониторинга реализованы HTTP health-check эндпоинты.
+- Consume page-view, click, performance, error, and custom-event messages from RabbitMQ.
+- Persist raw events in PostgreSQL.
+- Expose raw metric query methods through `metricsys.MetricsService`.
+- Serve liveness and readiness checks over HTTP.
 
-## Реализованный функционал
+## Interfaces
 
-| Компонент         | Что делает                                                       | Порт  |
-| ----------------- | ---------------------------------------------------------------- | ----- |
-| gRPC API          | 5 методов для получения метрик с фильтрацией и пагинацией        | 50051 |
-| HTTP API          | Health checks для monitoring-service (liveness/readiness probes) | 8082  |
-| RabbitMQ Consumer | Приём событий из 5 очередей                                      | —     |
-| PostgreSQL        | 5 таблиц для разных типов событий                                | 5433  |
+| Interface | Port | Description |
+| --- | --- | --- |
+| gRPC | `50051` | Raw metric query API |
+| HTTP | `8082` | Health endpoints |
+| PostgreSQL | `5432` on the host Compose setup | Raw metric storage |
+| RabbitMQ | `5672`, management UI `15672` | Event queue dependency |
 
-## Архитектура взаимодействия
+HTTP endpoints:
 
-```
-                    события                      
-api-service ──────────────────► RabbitMQ ──────► metrics-service
-     ▲                                                 │
-     │                                                 │ сохранение
-     │                                                 ▼
-     │                                            PostgreSQL
-     │              gRPC запрос                        │
-     └─────────────── aggregation-service ◄────────────┘
-                           │                      чтение данных
-                           │
-                    monitoring-service
-                   (HTTP health checks)
-```
+- `GET /health/ping`
+- `GET /health/ready`
+- `GET /health`
+- `GET /ping`
 
-**Поток данных:**
-1. api-service отправляет события в RabbitMQ (5 очередей)
-2. metrics-service читает из очередей и сохраняет в PostgreSQL
-3. aggregation-service запрашивает данные у metrics-service через gRPC
-4. monitoring-service проверяет здоровье всех сервисов через HTTP
+gRPC methods are defined in [`../proto/metrics.proto`](../proto/metrics.proto).
 
-## Стек технологий
-
-- **Язык:** C++23
-- **API:** gRPC + Protobuf, cpp-httplib (HTTP)
-- **Очереди:** rabbitmq-c (RabbitMQ consumer)
-- **БД:** PostgreSQL + libpqxx
-- **Сборка:** CMake + FetchContent (libpqxx, cpp-httplib, nlohmann/json)
-- **Деплой:** Docker + Docker Compose
-
-## Очереди RabbitMQ
-
-Сервис подписывается на следующие очереди:
-- `page_views` — просмотры страниц
-- `clicks` — клики
-- `performance_events` — метрики производительности
-- `error_events` — ошибки
-- `custom_events` — кастомные события
-
-## Структура файлов
-
-```
-metrics-service/
-├── include/           — заголовочные файлы
-│   ├── database.h     — конфигурация БД
-│   ├── metrics.h      — gRPC сервис
-│   ├── rabbitmq.h     — RabbitMQ consumer
-│   └── http_handler.h — HTTP сервер
-├── src/               — реализация
-│   ├── main.cpp       — точка входа, инициализация всех компонентов
-│   ├── database.cpp   — подключение к PostgreSQL
-│   ├── metrics.cpp    — реализация 5 gRPC методов
-│   ├── rabbitmq.cpp   — подключение и потребление из RabbitMQ
-│   └── http_handler.cpp — HTTP эндпоинты
-├── init.sql           — DDL таблиц и тестовые данные
-├── Dockerfile         — multi-stage сборка
-├── docker-compose.yml — оркестрация сервисов (postgres, rabbitmq, metrics-service)
-└── CMakeLists.txt     — конфигурация сборки
-```
-
-## Запуск
+## Run with Docker Compose
 
 ```bash
 cd metrics-service
-docker compose up --build
+docker compose up --build -d
 ```
 
-## Проверка работоспособности
+This starts:
+
+- `metrics-service`
+- PostgreSQL database `metrics_db`
+- RabbitMQ with the management UI on `http://localhost:15672`
+
+## Local build
+
+Requirements:
+
+- CMake 3.15+
+- C++23 compiler
+- Protobuf and gRPC development packages
+- `librabbitmq`
+- PostgreSQL client libraries
+
+Build:
 
 ```bash
-# HTTP health checks
-curl http://localhost:8082/health/ping
-curl http://localhost:8082/health/ready
-
-# gRPC (из корня проекта)
-grpcurl -plaintext -import-path ./proto -proto metrics.proto \
-  -d '{}' localhost:50051 metricsys.MetricsService/GetPageViews
-
-# Проверка очередей RabbitMQ
-docker exec metrics-rabbitmq rabbitmqctl list_queues name messages consumers
+cd metrics-service
+mkdir -p build
+cd build
+cmake ..
+cmake --build . --parallel
 ```
 
-## API
+Run:
 
-### gRPC методы
+```bash
+./metrics-service
+```
 
-| Метод             | Описание               |
-| ----------------- | ---------------------- |
-| `GetPageViews`    | Просмотры страниц      |
-| `GetClicks`       | Клики пользователей    |
-| `GetPerformance`  | Метрики TTFB, FCP, LCP |
-| `GetErrors`       | Ошибки на клиенте      |
-| `GetCustomEvents` | Кастомные события      |
+## Tests
 
-### HTTP эндпоинты
+```bash
+cd metrics-service
+mkdir -p build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+cmake --build . --parallel
+ctest --output-on-failure
+```
 
-| Эндпоинт            | Назначение                     | Код     |
-| ------------------- | ------------------------------ | ------- |
-| `GET /health/ping`  | Liveness probe                 | 200     |
-| `GET /health/ready` | Readiness probe (проверяет БД) | 200/503 |
+## Configuration
 
-## Схема БД
+The Docker Compose file sets the main runtime configuration:
 
-5 таблиц: `page_views`, `click_events`, `performance_events`, `error_events`, `custom_events`
-
-Все таблицы создаются автоматически при первом запуске через `init.sql`.
+| Variable | Purpose |
+| --- | --- |
+| `GRPC_PORT` | gRPC server port |
+| `HTTP_PORT` | HTTP health server port |
+| `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | PostgreSQL connection |
+| `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | RabbitMQ connection |
+| `RABBITMQ_QUEUE` | Queue used for metric events |

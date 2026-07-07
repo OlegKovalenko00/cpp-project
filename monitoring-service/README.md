@@ -1,121 +1,79 @@
-# Сервис мониторинга и логирования (Monitoring Service)
+# Monitoring Service
 
-Сервис мониторинга отслеживает состояние всех сервисов через health-check эндпоинты и записывает логи о действиях сервисов и возможных ошибках в таблицу `logs`.
+`monitoring-service` checks the health of the MetricSys services and records monitoring data in PostgreSQL. It exposes HTTP endpoints for liveness, readiness, and uptime queries.
 
-## Функциональность
-- Health-check других сервисов (api-service, metrics-service, aggregation-service)
-- Логирование событий и ошибок в PostgreSQL
-- Эндпоинт `/status` для получения состояния всех сервисов
+## Responsibilities
 
-## Технологии
+- Check `api-service`, `metrics-service`, and `aggregation-service` health endpoints.
+- Store monitoring records in PostgreSQL.
+- Expose uptime information by service and period.
+- Serve its own liveness and readiness endpoints.
 
-- **C++23**
-- **cpp-httplib** — HTTP клиент и сервер
-- **libpqxx** — PostgreSQL клиент
-- **CMake + FetchContent** — сборка зависимостей
+## Interfaces
 
-## Docker (рекомендуется)
+| Interface | Port | Description |
+| --- | --- | --- |
+| HTTP | `8083` | Health and uptime API |
+| PostgreSQL | Host port `5435` | Monitoring log storage |
+
+HTTP endpoints:
+
+- `GET /health/ping`
+- `GET /health/ready`
+- `GET /uptime?service=<name>[&period=day|week|month|year]`
+- `GET /uptime/day?service=<name>`
+- `GET /uptime/week?service=<name>`
+- `GET /uptime/month?service=<name>`
+- `GET /uptime/year?service=<name>`
+
+## Run with Docker Compose
 
 ```bash
 cd monitoring-service
 docker compose up --build -d
 ```
 
-## Локальная сборка
+This starts:
 
-### Требования
-- macOS или Linux с установленным CMake 3.14+
-- C++ компилятор с поддержкой C++23 (GCC 13+)
-- PostgreSQL (libpq)
-- pkg-config
+- `monitoring-service`
+- PostgreSQL for monitoring records
 
-### Установка зависимостей (macOS)
+The Compose configuration uses `host.docker.internal` to reach services running through the other Compose files.
 
-```bash
-brew install cmake libpqxx pkg-config postgresql@14
-```
+## Local build
 
-### Сборка
+Requirements:
+
+- CMake 3.14+
+- C++23 compiler
+- PostgreSQL client libraries
+- `libpqxx`
+- `pkg-config`
+
+Build:
 
 ```bash
 cd monitoring-service
-mkdir -p build && cd build
+mkdir -p build
+cd build
 cmake ..
-make -j$(nproc)
+cmake --build . --parallel
 ```
 
-Исполняемый файл `monitoring-service` будет находиться в `build/`.
-
-## Запуск
+Run:
 
 ```bash
-./build/monitoring-service
+./monitoring-service
 ```
 
-Сервер запустится на `http://localhost:8083`.
+## Configuration
 
-## Переменные окружения
+The Docker Compose file sets the main runtime configuration:
 
-| Переменная                 | По умолчанию           | Описание                 |
-| -------------------------- | ---------------------- | ------------------------ |
-| `HTTP_PORT`                | `8083`                 | Порт HTTP сервера        |
-| `POSTGRES_HOST`            | `postgres-service`     | Хост PostgreSQL          |
-| `POSTGRES_DB`              | `postgres`             | Имя базы данных          |
-| `POSTGRES_USER`            | `postgres`             | Пользователь             |
-| `POSTGRES_PASSWORD`        | `postgres`             | Пароль                   |
-| `API_SERVICE_HOST`         | `host.docker.internal` | Хост api-service         |
-| `API_SERVICE_PORT`         | `8080`                 | Порт api-service         |
-| `METRICS_SERVICE_HOST`     | `host.docker.internal` | Хост metrics-service     |
-| `METRICS_SERVICE_PORT`     | `8082`                 | Порт metrics-service     |
-| `AGGREGATION_SERVICE_HOST` | `host.docker.internal` | Хост aggregation-service |
-| `AGGREGATION_SERVICE_PORT` | `8081`                 | Порт aggregation-service |
-
-## Схема БД
-
-```sql
-CREATE TABLE IF NOT EXISTS logs (
-    id SERIAL PRIMARY KEY,
-    service_name VARCHAR(255),
-    status VARCHAR(10),
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    details TEXT
-);
-```
-
-### Переменные окружения
-
-- `HTTP_PORT` — порт HTTP-сервера (по умолчанию `8083`).
-- `POSTGRES_HOST` / `POSTGRES_PORT` — адрес БД (по умолчанию `localhost:5432`).
-- `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` — реквизиты подключения (по умолчанию `postgres` / `postgres` / `postgres`).
-
-### Эндпоинты
-
-- `GET /health/ping` — liveness.
-- `GET /health/ready` — readiness (проверяет подключение к БД).
-- `GET /uptime?service=<name>[&period=day|week|month|year]` — количество успешных (`OK`) записей для сервиса за сутки/неделю/месяц/год. Если `period` не указан — вернутся все четыре.
-- Короткие маршруты для конкретного периода: `GET /uptime/day|week|month|year?service=<name>`.
-
-## Структура проекта
-
-```
-monitoring-service/
-├── src/
-│   ├── main.cpp           # Точка входа
-│   ├── monitor.cpp        # Логика мониторинга
-│   ├── database.cpp       # Работа с БД
-│   ├── logging.cpp        # Логирование
-│   └── http_client.cpp    # HTTP-клиент
-├── include/
-│   ├── monitor.h          # Интерфейс мониторинга
-│   ├── http_client.h      # Интерфейс HTTP-клиента
-│   ├── logging.h          # Интерфейс логирования
-│   └── database.h         # Интерфейс БД
-├── tests/
-│   ├── test_monitor.cpp
-│   ├── test_http_client.cpp
-│   └── test_database.cpp
-├── CMakeLists.txt
-├── Dockerfile
-├── docker-compose.yml
-└── README.md
-```
+| Variable | Purpose |
+| --- | --- |
+| `HTTP_PORT` | HTTP server port |
+| `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | PostgreSQL connection |
+| `API_SERVICE_HOST`, `API_SERVICE_PORT` | API service health target |
+| `METRICS_SERVICE_HOST`, `METRICS_SERVICE_PORT` | Metrics service health target |
+| `AGGREGATION_SERVICE_HOST`, `AGGREGATION_SERVICE_PORT` | Aggregation service health target |
